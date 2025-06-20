@@ -1,0 +1,5 @@
+.vscode/
+build/
+vendored/
+gp
+dmg_boot.bin
