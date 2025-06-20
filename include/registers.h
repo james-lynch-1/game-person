@@ -3,7 +3,7 @@
 
 #include "util.h"
 
-union Registers {
+typedef union Registers_ {
     struct {
         union AF_ {
             u16 AF;
@@ -26,8 +26,8 @@ union Registers {
     } file;
     u16 arr16[6];
     u8 arr8[12];
-};
+} Registers;
 
-extern union Registers registers;
+extern Registers registers;
 
 #endif

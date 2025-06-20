@@ -2,11 +2,7 @@
 #define RAM
 
 #include "util.h"
-
-typedef struct Rom_ {
-    u8 bank0[0x4000];
-    u8 bank1[0x4000];
-} Rom;
+#include "rom.h"
 
 typedef struct VRam_ {
     u8 vRam[0x2000];
@@ -48,22 +44,20 @@ typedef struct IEReg_ {
     u8 iEReg;
 } IEReg;
 
-struct MMap_s { // the entire memory map
-    Rom rom;
-    u8 vRam[0x2000];
-    u8 eWRam[0x2000];
-    u8 iWRam1[0x1000];
-    u8 iWRam2[0x1000];
-    u8 echoRam[0x1E00];
-    u8 oam[0xA0];
-    u8 filler[0x60];
-    IORegs ioRegs;
-    u8 hRam[127];
-    u8 iEReg;
-};
-
 typedef union MMap_ {
-    struct MMap_s mMap;
+    struct MMap_s_ {
+        Rom rom;
+        u8 vRam[0x2000];
+        u8 eWRam[0x2000];
+        u8 iWRam1[0x1000];
+        u8 iWRam2[0x1000];
+        u8 echoRam[0x1E00];
+        u8 oam[0xA0];
+        u8 filler[0x60];
+        IORegs ioRegs;
+        u8 hRam[127];
+        u8 iEReg;
+    } MMap_s;
     u8 mMapArr[16384];
 } MMap;
 

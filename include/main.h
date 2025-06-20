@@ -6,4 +6,8 @@
 #include "ram.h"
 #include "rom.h"
 
+// globals
+extern MMap mMap;
+extern Registers regs;
+
 #endif

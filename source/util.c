@@ -19,3 +19,24 @@ char* decToHex(int num, char* buffer, int size) {
     buffer[size - 1] = '\0';
     return buffer;
 }
+
+// supplied buffer should be 16 characters
+void getTitle(char* buffer, FILE* romPtr) {
+    fseek(romPtr, ROM_TITLE_ADDR, SEEK_SET);
+    fgets(buffer, 16, romPtr);
+}
+
+void printRom(FILE* romPtr) {
+    u8 byte;
+    char buffer[3];
+    fseek(romPtr, 0L, SEEK_END);
+    int romSize = ftell(romPtr);
+    fseek(romPtr, 0L, SEEK_SET);
+    for (int i = 0; i < romSize / 16; i++) {
+        for (int j = 0; j < 16; j++) {
+            fread(&byte, 1, 1, romPtr);
+            printf("0x%s ", decToHex(byte, buffer, 3));
+        }
+        printf("\n");
+    }
+}
