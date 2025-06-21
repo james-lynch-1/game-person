@@ -16,16 +16,18 @@ add_subdirectory(vendored/SDL EXCLUDE_FROM_ALL)
 
 # Create your game executable target as usual
 
-add_library(libgp SHARED ${CMAKE_SOURCE_DIR}/source/ram.c
-                         ${CMAKE_SOURCE_DIR}/source/util.c
+add_library(libgp SHARED ${CMAKE_SOURCE_DIR}/source/util.c
+                         ${CMAKE_SOURCE_DIR}/source/ram.c
                          ${CMAKE_SOURCE_DIR}/source/registers.c
                          ${CMAKE_SOURCE_DIR}/source/rom.c)
+                         
+target_include_directories(libgp PUBLIC ${CMAKE_SOURCE_DIR}/include)
 
 add_executable(gp ${CMAKE_SOURCE_DIR}/source/main.c)
 
-target_include_directories(libgp PUBLIC ${CMAKE_SOURCE_DIR}/include)
 
-target_link_directories(libgp PUBLIC ${CMAKE_SOURCE_DIR}/include)
+# target_link_directories(libgp PUBLIC ${CMAKE_SOURCE_DIR}/include)
 
 # Link to the actual SDL3 library.
-target_link_libraries(gp PRIVATE SDL3::SDL3 libgp)
+target_link_libraries(libgp PUBLIC SDL3::SDL3)
+target_link_libraries(gp PRIVATE libgp)
