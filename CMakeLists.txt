@@ -19,7 +19,9 @@ add_subdirectory(vendored/SDL EXCLUDE_FROM_ALL)
 add_library(libgp SHARED ${CMAKE_SOURCE_DIR}/source/util.c
                          ${CMAKE_SOURCE_DIR}/source/ram.c
                          ${CMAKE_SOURCE_DIR}/source/registers.c
-                         ${CMAKE_SOURCE_DIR}/source/rom.c)
+                         ${CMAKE_SOURCE_DIR}/source/rom.c
+                         ${CMAKE_SOURCE_DIR}/source/opcodes.c
+                         ${CMAKE_SOURCE_DIR}/source/global.c)
                          
 target_include_directories(libgp PUBLIC ${CMAKE_SOURCE_DIR}/include)
 

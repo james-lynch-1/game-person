@@ -6,9 +6,6 @@ bool update() {
         if (e.type == SDL_EVENT_QUIT) {
             return false;
         }
-        if (e.type == SDL_EVENT_KEY_UP && e.key.key == SDLK_ESCAPE) {
-            return false;
-        }
     }
 
     char* pix;
@@ -35,9 +32,6 @@ void render(Uint64 aTicks) {
             gFrameBuffer[c] = (int)(i * i + j * j + aTicks) | 0xff000000;
         }
     }
-    for (int i = 0; i < 100; i++)
-    for (int j = 0; j < 100; j++)
-      putpixel(j + 20, i + 20, 0xffff0000);
 }
 
 void loop() {
@@ -61,10 +55,11 @@ int main(int argc, char* argv[]) {
     }
     
     initialiseValues();
+    handleOpcode(romPtr);
     if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS))
         return -1;
 
-    char title[30];
+    char title[30] = "";
     getTitle(title, romPtr);
     strncat(title, " - GamePerson", strlen(title) - 1);
 
@@ -86,6 +81,7 @@ int main(int argc, char* argv[]) {
     SDL_Quit();
 
     fclose(romPtr);
+    printf("\n");
     return 0;
 }
 
@@ -94,4 +90,6 @@ void initialiseValues() {
     scale = 4;
     WINDOW_WIDTH = 160 * scale;
     WINDOW_HEIGHT = 144 * scale;
+
+    cycles = 0;
 }
