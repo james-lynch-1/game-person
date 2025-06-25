@@ -4,3 +4,4 @@ vendored/
 gp
 dmg_boot.bin
 smlandbinary.txt
+source/opcodes-old.c

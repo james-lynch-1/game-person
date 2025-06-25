@@ -48,14 +48,26 @@ int main(int argc, char* argv[]) {
         printf("no rom file supplied\n");
         exit(1);
     }
-    FILE* romPtr;
     if ((romPtr = fopen(argv[1], "rb")) == NULL) {
         printf("couldn't open file\n");
         exit(1);
     }
     
     initialiseValues();
-    handleOpcode(romPtr);
+    fread(MMAP.rom.bank0_1, 4, 0x2000, romPtr);
+    for (int i = 0; i < 250; i++) {
+        // char pcHex[5];
+        // decToHex(MMAP.rom.bank0_1[pc], pcHex, 5);
+        // if (i % 4 == 0) printf("%s ", pcHex);
+        cpuTick();
+        if (i % 4 == 0 && cpuState == fetchOpcode) printf("%d ", pc);
+    }
+    printf("\n");
+    char regLetters[] = {'F', 'A', 'C', 'B', 'E', 'D', 'L', 'H'};
+    for (int i = 0; i < 8; i++) {
+        printf("%c: %d\n", regLetters[i], regs.arr8[i]);
+    }
+    return 0;
     if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS))
         return -1;
 
@@ -91,5 +103,11 @@ void initialiseValues() {
     WINDOW_WIDTH = 160 * scale;
     WINDOW_HEIGHT = 144 * scale;
 
-    cycles = 0;
+    pc = 0;
+    ticks = 0;
+    cpuState = fetchOpcode;
+    prefixedInstr = false;
+    for (int i = 0; i < 7; i++) {
+        regs.arr16[i] = 0;
+    }
 }

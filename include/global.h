@@ -7,16 +7,25 @@
 
 // globals
 // values
+extern FILE* romPtr;
 extern u32 maxFPS;
 extern int scale;
 extern int WINDOW_WIDTH;
 extern int WINDOW_HEIGHT;
 
-extern int cycles;
+// cpu stuff
+extern int pc; // program counter - where we are in the ROM
+extern int ticks;
+enum CpuState {
+    fetchOpcode,
+    executeInstruction
+};
+extern enum CpuState cpuState;
+extern bool prefixedInstr;
 
 // structs
 extern MMap mMap;
-extern Registers registers;
+extern Registers regs;
 
 // renderer stuff
 extern int* gFrameBuffer;

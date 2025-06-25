@@ -10,7 +10,14 @@
 #define s32 int
 
 // helper macros
-#define MMAP mMap.MMap_s // access memory map struct inside union more easily
+#define MMAP        mMap.MMap_s // access memory map struct inside union more easily
+#define MMAPARR     mMap.mMapArr
+#define REGARR8     regs.arr8
+#define REGARR16    regs.arr16
+#define ROM         mMap.MMap_s.rom
+
+// cpu micro-operation enums
+// #define 
 
 // magic addresses
 // ROM:
@@ -18,10 +25,11 @@
 #define ROM_TITLE_ADDR  0x0134
 
 // Flags register
-#define ZERO_FLAG       0b0001
-#define SUBTR_FLAG      0b0010
-#define HALFCARRY_FLAG  0b0100
-#define CARRY_FLAG      0b1000
+#define FLAGS           regs.file.AF.F
+#define ZERO_FLAG       0b10000000
+#define SUBTR_FLAG      0b01000000
+#define HALFCARRY_FLAG  0b00100000
+#define CARRY_FLAG      0b00010000
 
 typedef struct IORegs_ {
     u8 joypadInput;
@@ -43,30 +51,60 @@ typedef union Registers_ {
     struct {
         union AF_ {
             u16 AF;
-            struct { u8 A; u8 F; };
+            struct { u8 F; u8 A; };
         } AF;
         union BC_ {
             u16 BC;
-            struct { u8 B; u8 C; };
+            struct { u8 C; u8 B; };
         } BC;
         union DE_ {
             u16 DE;
-            struct { u8 D; u8 E; };
+            struct { u8 E; u8 D; };
         } DE;
         union HL_ {
             u16 HL;
-            struct { u8 H; u8 L; };
+            struct { u8 L; u8 H; };
         } HL;
         u16 SP;
         u16 PC;
+        u8 W;
+        u8 Z;
     } file;
-    u16 arr16[6];
-    u8 arr8[12];
+    u16 arr16[7];
+    u8 arr8[14];
 } Registers;
 
-typedef struct Rom_ {
-    u8 bank0[0x4000];
-    u8 bank1[0x4000];
+// register indices in regs.arr8
+#define REGF_IDX    0
+#define REGA_IDX    1
+#define REGC_IDX    2
+#define REGB_IDX    3
+#define REGE_IDX    4
+#define REGD_IDX    5
+#define REGL_IDX    6
+#define REGH_IDX    7
+#define REGSPLO_IDX 8
+#define REGSPHI_IDX 9
+#define REGPCLO_IDX 10
+#define REGPCHI_IDX 11
+#define REGZ_IDX    12
+#define REGW_IDX    13
+
+// register indices in regs.arr16
+#define REGAF_IDX   0
+#define REGBC_IDX   1
+#define REGDE_IDX   2
+#define REGHL_IDX   3
+#define REGSP_IDX   4
+#define REGPC_IDX   5
+#define REGWZ_IDX   6
+
+typedef union Rom_ {
+    struct Rom_s_ {
+        u8 bank0[0x4000];
+        u8 bank1[0x4000];
+    } Rom_s;
+    u8 bank0_1[0x8000];
 } Rom;
 
 typedef union MMap_ {

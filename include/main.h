@@ -6,7 +6,7 @@
 #include "registers.h"
 #include "ram.h"
 #include "rom.h"
-#include "opcodes.h"
+#include "cpu.h"
 #include "global.h"
 
 void initialiseValues();

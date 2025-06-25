@@ -9,6 +9,8 @@
 #include "math.h"
 #include "type.h"
 
+#define ROMVAL MMAP.rom.bank0_1[pc++]
+
 char* decToBin(int num, char* buffer, int size);
 
 char* decToHex(int num, char* buffer, int size);

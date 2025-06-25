@@ -1,5 +1,5 @@
-#ifndef ROM
-#define ROM
+#ifndef ROMH
+#define ROMH
 
 #include "util.h"
 
