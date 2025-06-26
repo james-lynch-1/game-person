@@ -16,9 +16,6 @@
 #define REGARR16    regs.arr16
 #define ROM         mMap.MMap_s.rom
 
-// cpu micro-operation enums
-// #define 
-
 // magic addresses
 // ROM:
 #define ROM_HEADER_ADDR 0x0100
@@ -31,27 +28,11 @@
 #define HALFCARRY_FLAG  0b00100000
 #define CARRY_FLAG      0b00010000
 
-typedef struct IORegs_ {
-    u8 joypadInput;
-    u16 serialTransfer;
-    u8 filler1;
-    u8 timerAndDivider[4];
-    u8 filler2[7];
-    u8 interrupts;
-    u8 audio[23];
-    u8 filler3[10];
-    u8 wavePattern[16];
-    u8 lcdProps[12];
-    u8 filler4[4]; // last byte is used by CGB for VRAM Bank Select
-    u8 disableBootrom;
-    u8 filler5[44];
-} IORegs;
-
 typedef union Registers_ {
     struct {
         union AF_ {
             u16 AF;
-            struct { u8 F; u8 A; };
+            struct { u8 F; u8 A; }; // f: lower part, a: higher part
         } AF;
         union BC_ {
             u16 BC;
@@ -67,8 +48,8 @@ typedef union Registers_ {
         } HL;
         u16 SP;
         u16 PC;
-        u8 W;
         u8 Z;
+        u8 W;
     } file;
     u16 arr16[7];
     u8 arr8[14];
@@ -99,6 +80,10 @@ typedef union Registers_ {
 #define REGPC_IDX   5
 #define REGWZ_IDX   6
 
+
+
+/* MEMORY MAP */
+
 typedef union Rom_ {
     struct Rom_s_ {
         u8 bank0[0x4000];
@@ -106,6 +91,38 @@ typedef union Rom_ {
     } Rom_s;
     u8 bank0_1[0x8000];
 } Rom;
+
+typedef union VRam_ {
+    struct VRam_s_ {
+        u16 block0[0x80];
+        u16 block1[0x80];
+        u16 block2[0x80];
+        u8 map0[0x400];
+        u8 map1[0x400];
+    } VRam_s;
+    u8 VRamArr[0x980];
+} VRam;
+
+#define TILEID(addr)        addr / 16 % 256
+#define MAPENTRY_X(addr)    addr % 32
+#define MAPENTRY_Y(addr)    addr / 32 % 32
+
+typedef struct IORegs_ {
+    u8 joypadInput;
+    u16 serialTransfer;
+    u8 filler1;
+    u8 timerAndDivider[4];
+    u8 filler2[7];
+    u8 interrupts;
+    u8 audio[23];
+    u8 filler3[10];
+    u8 wavePattern[16];
+    u8 lcdProps[12];
+    u8 filler4[3];
+    u8 cgbVRamBankSelect;
+    u8 disableBootrom;
+    u8 filler5[44];
+} IORegs;
 
 typedef union MMap_ {
     struct MMap_s_ {

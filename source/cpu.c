@@ -61,8 +61,8 @@ void sub() {
 
 void rol() {
     u8* r = &(regs.arr8[pQ[pIndex++]]);
-    int leftmostBit = (*r & 0x10000000) != 0;
-    *r = (*r << 1) & leftmostBit;
+    int leftmostBit = (*r & 0b10000000) != 0;
+    *r = (*r << 1) | leftmostBit;
     FLAGS = ((*r == 0) ? ZERO_FLAG : 0) | leftmostBit << 4;
 }
 
@@ -89,7 +89,7 @@ void readByteAndInc() { // increment the address you got it from
     pIndex += 2;
 }
 
-void readByteToReg() {
+void readByteToReg() { // dest regs.arr8 index, val: a value
     int dest = pQ[pIndex++];
     int val = pQ[pIndex++];
     REGARR8[dest] = val;
@@ -107,7 +107,7 @@ void readByteAndXor() {
 }
 
 void writeByteToMem() {
-    MMAPARR[pQ[pIndex]] = pQ[pIndex];
+    MMAPARR[pQ[pIndex]] = pQ[pIndex + 1];
     pIndex += 2;
 }
 
@@ -126,16 +126,17 @@ void cmpJR() {
     s8 offset = pQ[pIndex++];
     if (condition) {
         opQ[numOpsQueued++] = jump;
-        pQ[pIndex++] = pc + offset; // if program jumps to consecutive JR instrs, will overflow
+        pQ[pIndex] = pc + offset; // if program jumps to consecutive JR instrs, will overflow
     }
 }
 
 void cmpImmediate() {
-    u8 result = regs.file.AF.A - pQ[pIndex++];
+    u8 result = regs.file.AF.A - pQ[pIndex];
     int zero = result == 0 ? ZERO_FLAG : 0;
-    int halfCarry = result & 0b00010000 ? HALFCARRY_FLAG : 0;
+    int halfCarry = ((regs.file.AF.A & 15) < (pQ[pIndex] & 15)) << 5;
     int carry = result & 0b10000000 ? CARRY_FLAG : 0;
-    FLAGS |= zero | SUBTR_FLAG | halfCarry | carry;
+    FLAGS = zero | SUBTR_FLAG | halfCarry | carry;
+    pIndex++;
 }
 
 void incrementReg16() {
@@ -165,15 +166,15 @@ void decrementReg8() {
 
 // write to a mem address and decrement supplied 16 bit reg
 void writeByteToMemAndDec16() { // val of reg, data to write, index of reg
-    MMAPARR[pQ[pIndex]] = pQ[pIndex + 1];
-    regs.arr16[pIndex + 2]--;
-    pIndex += 3;
+    MMAPARR[regs.arr16[pQ[pIndex]]] = pQ[pIndex + 1];
+    regs.arr16[pIndex]--;
+    pIndex += 2;
 }
 
-void writeByteToMemAndInc16() {
-    MMAPARR[pQ[pIndex]] = pQ[pIndex + 1];
-    regs.arr16[pIndex + 2]++;
-    pIndex += 3;
+void writeByteToMemAndInc16() { // dest: mmaparr index, val: value
+    MMAPARR[regs.arr16[pQ[pIndex]]] = pQ[pIndex + 1];
+    regs.arr16[pIndex]++;
+    pIndex += 2;
 }
 
 // decrement a 16-bit value in memory
@@ -202,10 +203,13 @@ void cpuTick() {
                     case 0x00: // NOP 1 4 - - - -
                         break;
                     case 0x01: // LD BC n16 3 12 - - - -
+                        numOpsQueued = 2;
                         break;
                     case 0x02: // LD [BC] A 1 8 - - - -
+                        numOpsQueued = 1;
                         break;
                     case 0x03: // INC BC 1 8 - - - -
+                        numOpsQueued = 1;
                         break;
                     case 0x04: // INC B 1 4 Z 0 H -
                         pQ[0] = REGB_IDX;
@@ -222,12 +226,16 @@ void cpuTick() {
                     case 0x07: // RLCA 1 4 0 0 0 C
                         break;
                     case 0x08: // LD [a16] SP 3 20 - - - -
+                        numOpsQueued = 4;
                         break;
                     case 0x09: // ADD HL BC 1 8 - 0 H C
+                        numOpsQueued = 1;
                         break;
                     case 0x0A: // LD A [BC] 1 8 - - - -
+                        numOpsQueued = 1;
                         break;
                     case 0x0B: // DEC BC 1 8 - - - -
+                        numOpsQueued = 1;
                         break;
                     case 0x0C: // INC C 1 4 Z 0 H -
                         pQ[0] = REGC_IDX;
@@ -247,10 +255,11 @@ void cpuTick() {
                         break;
                     case 0x11: // LD DE n16 3 12 - - - -
                         numOpsQueued = 2;
-                        opQ[1] = readByteToReg; pQ[0] = REGD_IDX; pQ[1] = ROMVAL;
-                        opQ[0] = readByteToReg; pQ[2] = REGE_IDX; pQ[3] = ROMVAL;
+                        opQ[1] = readByteToReg; pQ[0] = REGE_IDX; pQ[1] = ROMVAL;
+                        opQ[0] = readByteToReg; pQ[2] = REGD_IDX; pQ[3] = ROMVAL;
                         break;
                     case 0x12: // LD [DE] A 1 8 - - - -
+                        numOpsQueued = 1;
                         break;
                     case 0x13: // INC DE 1 8 - - - -
                         numOpsQueued = 1;
@@ -279,12 +288,14 @@ void cpuTick() {
                         opQ[0] = jump; pQ[2] = pc + regs.arr8[REGW_IDX];
                         break;
                     case 0x19: // ADD HL DE 1 8 - 0 H C
+                        numOpsQueued = 1;
                         break;
                     case 0x1A: // LD A [DE] 1 8 - - - -
                         numOpsQueued = 1;
-                        opQ[0] = readByteToReg; pQ[0] = regs.file.AF.A; pQ[1] = regs.file.DE.DE;
+                        opQ[0] = readByteToReg; pQ[0] = REGA_IDX; pQ[1] = MMAPARR[regs.arr16[REGDE_IDX]];
                         break;
                     case 0x1B: // DEC DE 1 8 - - - -
+                        numOpsQueued = 1;
                         break;
                     case 0x1C: // INC E 1 4 Z 0 H -
                         pQ[0] = REGE_IDX;
@@ -312,7 +323,7 @@ void cpuTick() {
                     case 0x22: // LD [HL+] A 1 8 - - - -
                         numOpsQueued = 1;
                         opQ[0] = writeByteToMemAndInc16;
-                        pQ[0] = regs.file.HL.HL; pQ[1] = regs.file.AF.A; pQ[2] = REGHL_IDX;
+                        pQ[0] = REGHL_IDX; pQ[1] = regs.file.AF.A;
                         break;
                     case 0x23: // INC HL 1 8 - - - -
                         numOpsQueued = 1;
@@ -337,10 +348,13 @@ void cpuTick() {
                         opQ[0] = cmpJR; pQ[0] = (FLAGS & ZERO_FLAG) != 0; pQ[1] = ROMVAL;
                         break;
                     case 0x29: // ADD HL HL 1 8 - 0 H C
+                        numOpsQueued = 1;
                         break;
                     case 0x2A: // LD A [HL+] 1 8 - - - -
+                        numOpsQueued = 1;
                         break;
                     case 0x2B: // DEC HL 1 8 - - - -
+                        numOpsQueued = 1;
                         break;
                     case 0x2C: // INC L 1 4 Z 0 H -
                         pQ[0] = REGL_IDX;
@@ -355,6 +369,7 @@ void cpuTick() {
                     case 0x2F: // CPL 1 4 - 1 1 -
                         break;
                     case 0x30: // JR NC e8 2 12/8 - - - -
+                        numOpsQueued = 1;
                         break;
                     case 0x31: // LD SP n16 3 12 - - - -
                         numOpsQueued = 2;
@@ -363,25 +378,33 @@ void cpuTick() {
                         break;
                     case 0x32: // LD [HL-] A 1 8 - - - -
                         numOpsQueued = 1;
-                        opQ[0] = writeByteToMem; pQ[0] = REGHL_IDX; pQ[1] = regs.file.AF.A;
+                        opQ[0] = writeByteToMemAndDec; pQ[0] = REGHL_IDX; pQ[1] = regs.file.AF.A;
                         break;
                     case 0x33: // INC SP 1 8 - - - -
+                        numOpsQueued = 1;
                         break;
                     case 0x34: // INC [HL] 1 12 Z 0 H -
+                        numOpsQueued = 2;
                         break;
                     case 0x35: // DEC [HL] 1 12 Z 1 H -
+                        numOpsQueued = 2;
                         break;
                     case 0x36: // LD [HL] n8 2 12 - - - -
+                        numOpsQueued = 2;
                         break;
                     case 0x37: // SCF 1 4 - 0 0 1
                         break;
                     case 0x38: // JR C e8 2 12/8 - - - -
+                        numOpsQueued = 1;
                         break;
                     case 0x39: // ADD HL SP 1 8 - 0 H C
+                        numOpsQueued = 1;
                         break;
                     case 0x3A: // LD A [HL-] 1 8 - - - -
+                        numOpsQueued = 1;
                         break;
                     case 0x3B: // DEC SP 1 8 - - - -
+                        numOpsQueued = 1;
                         break;
                     case 0x3C: // INC A 1 4 Z 0 H -
                         pQ[0] = REGA_IDX;
@@ -422,6 +445,7 @@ void cpuTick() {
                         readByteToReg();
                         break;
                     case 0x46: // LD B [HL] 1 8 - - - -
+                        numOpsQueued = 1;
                         break;
                     case 0x47: // LD B A 1 4 - - - -
                         pQ[0] = REGB_IDX; pQ[1] = REGA_IDX;
@@ -452,6 +476,7 @@ void cpuTick() {
                         readByteToReg();
                         break;
                     case 0x4E: // LD C [HL] 1 8 - - - -
+                        numOpsQueued = 1;
                         break;
                     case 0x4F: // LD C A 1 4 - - - -
                         pQ[0] = REGC_IDX; pQ[1] = REGA_IDX;
@@ -482,6 +507,7 @@ void cpuTick() {
                         readByteToReg();
                         break;
                     case 0x56: // LD D [HL] 1 8 - - - -
+                        numOpsQueued = 1;
                         break;
                     case 0x57: // LD D A 1 4 - - - -
                         pQ[0] = REGD_IDX; pQ[1] = REGA_IDX;
@@ -512,6 +538,7 @@ void cpuTick() {
                         readByteToReg();
                         break;
                     case 0x5E: // LD E [HL] 1 8 - - - -
+                        numOpsQueued = 1;
                         break;
                     case 0x5F: // LD E A 1 4 - - - -
                         pQ[0] = REGE_IDX; pQ[1] = REGA_IDX;
@@ -542,6 +569,7 @@ void cpuTick() {
                         readByteToReg();
                         break;
                     case 0x66: // LD H [HL] 1 8 - - - -
+                        numOpsQueued = 1;
                         break;
                     case 0x67: // LD H A 1 4 - - - -
                         pQ[0] = REGH_IDX; pQ[1] = REGA_IDX;
@@ -572,22 +600,29 @@ void cpuTick() {
                         readByteToReg();
                         break;
                     case 0x6E: // LD L [HL] 1 8 - - - -
+                        numOpsQueued = 1;
                         break;
                     case 0x6F: // LD L A 1 4 - - - -
                         pQ[0] = REGL_IDX; pQ[1] = REGA_IDX;
                         readByteToReg();
                         break;
                     case 0x70: // LD [HL] B 1 8 - - - -
+                        numOpsQueued = 1;
                         break;
                     case 0x71: // LD [HL] C 1 8 - - - -
+                        numOpsQueued = 1;
                         break;
                     case 0x72: // LD [HL] D 1 8 - - - -
+                        numOpsQueued = 1;
                         break;
                     case 0x73: // LD [HL] E 1 8 - - - -
+                        numOpsQueued = 1;
                         break;
                     case 0x74: // LD [HL] H 1 8 - - - -
+                        numOpsQueued = 1;
                         break;
                     case 0x75: // LD [HL] L 1 8 - - - -
+                        numOpsQueued = 1;
                         break;
                     case 0x76: // HALT 1 4 - - - -
                         break;
@@ -675,6 +710,7 @@ void cpuTick() {
                     case 0x8D: // ADC A L 1 4 Z 0 H C
                         break;
                     case 0x8E: // ADC A [HL] 1 8 Z 0 H C
+                        numOpsQueued = 1;
                         break;
                     case 0x8F: // ADC A A 1 4 Z 0 H C
                         break;
@@ -703,7 +739,7 @@ void cpuTick() {
                         sub();
                         break;
                     case 0x96: // SUB A [HL] 1 8 Z 1 H C
-                        // numOpsQueued = 1;
+                        numOpsQueued = 1;
                         // opQ[0] = readByteAndSub;
                         // pQ[0] = 
                         break;
@@ -724,6 +760,7 @@ void cpuTick() {
                     case 0x9D: // SBC A L 1 4 Z 1 H C
                         break;
                     case 0x9E: // SBC A [HL] 1 8 Z 1 H C
+                        numOpsQueued = 1;
                         break;
                     case 0x9F: // SBC A A 1 4 Z 1 H -
                         break;
@@ -740,6 +777,7 @@ void cpuTick() {
                     case 0xA5: // AND A L 1 4 Z 0 1 0
                         break;
                     case 0xA6: // AND A [HL] 1 8 Z 0 1 0
+                        numOpsQueued = 1;
                         break;
                     case 0xA7: // AND A A 1 4 Z 0 1 0
                         break;
@@ -781,6 +819,7 @@ void cpuTick() {
                     case 0xB5: // OR A L 1 4 Z 0 0 0
                         break;
                     case 0xB6: // OR A [HL] 1 8 Z 0 0 0
+                        numOpsQueued = 1;
                         break;
                     case 0xB7: // OR A A 1 4 Z 0 0 0
                         break;
@@ -819,6 +858,7 @@ void cpuTick() {
                         cmp();
                         break;
                     case 0xC0: // RET NZ 1 20/8 - - - -
+                        numOpsQueued = 1;
                         break;
                     case 0xC1: // POP BC 1 12 - - - - PROBLEMATIC
                         numOpsQueued = 2;
@@ -829,23 +869,28 @@ void cpuTick() {
                         pQ[6] = REGC_IDX; pQ[7] = REGW_IDX;
                         break;
                     case 0xC2: // JP NZ a16 3 16/12 - - - -
+                        numOpsQueued = 2;
                         break;
                     case 0xC3: // JP a16 3 16 - - - -
+                        numOpsQueued = 3;
                         break;
                     case 0xC4: // CALL NZ a16 3 24/12 - - - -
+                        numOpsQueued = 2;
                         break;
                     case 0xC5: // PUSH BC 1 16 - - - -
                         numOpsQueued = 3;
                         opQ[2] = decrementReg16; pQ[0] = REGSP_IDX;
-                        opQ[1] = writeByteToMemAndDec16;
-                        pQ[1] = regs.file.SP; pQ[2] = regs.file.BC.C; pQ[3] = REGSP_IDX;
-                        opQ[0] = writeByteToMem; pQ[4] = regs.file.SP; pQ[5] = regs.file.BC.B;
+                        opQ[1] = writeByteToMemAndDec16; pQ[1] = REGSP_IDX; pQ[2] = regs.file.BC.C;
+                        opQ[0] = writeByteToMem; pQ[3] = regs.file.SP; pQ[4] = regs.file.BC.B;
                         break;
                     case 0xC6: // ADD A n8 2 8 Z 0 H C
+                        numOpsQueued = 1;
                         break;
                     case 0xC7: // RST $00 1 16 - - - -
+                        numOpsQueued = 3;
                         break;
                     case 0xC8: // RET Z 1 20/8 - - - -
+                        numOpsQueued = 1;
                         break;
                     case 0xC9: // RET 1 16 - - - -
                         numOpsQueued = 3;
@@ -854,61 +899,75 @@ void cpuTick() {
                         opQ[0] = readToPC; pQ[4] = REGWZ_IDX;
                         break;
                     case 0xCA: // JP Z a16 3 16/12 - - - -
+                        numOpsQueued = 2;
                         break;
                     case 0xCB: // PREFIX 1 4 - - - -
                         prefixedInstr = true;
                         break;
                     case 0xCC: // CALL Z a16 3 24/12 - - - -
+                        numOpsQueued = 2;
                         break;
                     case 0xCD: // CALL a16 3 24 - - - -
                         numOpsQueued = 5;
                         opQ[4] = readByteToReg; pQ[0] = REGZ_IDX; pQ[1] = ROMVAL;
                         opQ[3] = readByteToReg; pQ[2] = REGW_IDX; pQ[3] = ROMVAL;
                         opQ[2] = decrementReg16; pQ[4] = REGSP_IDX;
-                        opQ[1] = writeByteToMemAndDec16;
-                        pQ[5] = REGSP_IDX; pQ[6] = REGW_IDX; pQ[7] = REGSP_IDX;
-                        opQ[0] = writeByteToMem; pQ[8] = REGSP_IDX; pQ[9] = REGZ_IDX;
+                        opQ[1] = writeByteToMemAndDec16; pQ[5] = REGSP_IDX; pQ[6] = REGW_IDX;
+                        opQ[0] = writeByteToMem; pQ[7] = REGSP_IDX; pQ[8] = REGZ_IDX;
                         break;
                     case 0xCE: // ADC A n8 2 8 Z 0 H C
+                        numOpsQueued = 1;
                         break;
                     case 0xCF: // RST $08 1 16 - - - -
+                        numOpsQueued = 3;
                         break;
                     case 0xD0: // RET NC 1 20/8 - - - -
+                        numOpsQueued = 1;
                         break;
                     case 0xD1: // POP DE 1 12 - - - -
+                        numOpsQueued = 2;
                         break;
                     case 0xD2: // JP NC a16 3 16/12 - - - -
+                        numOpsQueued = 2;
                         break;
                     case 0xD3: // ILLEGAL_D3 1 4 - - - -
                         break;
                     case 0xD4: // CALL NC a16 3 24/12 - - - -
+                        numOpsQueued = 2;
                         break;
                     case 0xD5: // PUSH DE 1 16 - - - -
                         numOpsQueued = 3;
                         opQ[2] = decrementReg16; pQ[0] = REGSP_IDX;
-                        opQ[1] = writeByteToMemAndDec16;
-                        pQ[1] = regs.file.SP; pQ[2] = regs.file.DE.E; pQ[3] = REGSP_IDX;
-                        opQ[0] = writeByteToMem; pQ[4] = regs.file.SP; pQ[5] = regs.file.DE.D;
+                        opQ[1] = writeByteToMemAndDec16; pQ[1] = REGSP_IDX; pQ[2] = regs.file.DE.D;
+                        opQ[0] = writeByteToMem; pQ[3] = regs.file.SP; pQ[4] = regs.file.DE.E;
                         break;
                     case 0xD6: // SUB A n8 2 8 Z 1 H C
+                        numOpsQueued = 1;
                         break;
                     case 0xD7: // RST $10 1 16 - - - -
+                        numOpsQueued = 3;
                         break;
                     case 0xD8: // RET C 1 20/8 - - - -
+                        numOpsQueued = 1;
                         break;
                     case 0xD9: // RETI 1 16 - - - -
+                        numOpsQueued = 3;
                         break;
                     case 0xDA: // JP C a16 3 16/12 - - - -
+                        numOpsQueued = 2;
                         break;
                     case 0xDB: // ILLEGAL_DB 1 4 - - - -
                         break;
                     case 0xDC: // CALL C a16 3 24/12 - - - -
+                        numOpsQueued = 2;
                         break;
                     case 0xDD: // ILLEGAL_DD 1 4 - - - -
                         break;
                     case 0xDE: // SBC A n8 2 8 Z 1 H C
+                        numOpsQueued = 1;
                         break;
                     case 0xDF: // RST $18 1 16 - - - -
+                        numOpsQueued = 3;
                         break;
                     case 0xE0: // LDH [a8] A 2 12 - - - -
                         numOpsQueued = 2;
@@ -918,6 +977,7 @@ void cpuTick() {
                         pQ[2] = 0xFF00 + REGARR8[REGZ_IDX]; pQ[3] = regs.file.AF.A;
                         break;
                     case 0xE1: // POP HL 1 12 - - - -
+                        numOpsQueued = 2;
                         break;
                     case 0xE2: // LDH [C] A 1 8 - - - -
                         numOpsQueued = 1;
@@ -931,15 +991,17 @@ void cpuTick() {
                     case 0xE5: // PUSH HL 1 16 - - - -
                         numOpsQueued = 3;
                         opQ[2] = decrementReg16; pQ[0] = REGSP_IDX;
-                        opQ[1] = writeByteToMemAndDec16;
-                        pQ[1] = regs.file.SP; pQ[2] = regs.file.HL.L; pQ[3] = REGSP_IDX;
-                        opQ[0] = writeByteToMem; pQ[4] = regs.file.SP; pQ[5] = regs.file.HL.H;
+                        opQ[1] = writeByteToMemAndDec16; pQ[1] = REGSP_IDX; pQ[2] = regs.file.HL.H;
+                        opQ[0] = writeByteToMem; pQ[3] = regs.file.SP; pQ[4] = regs.file.HL.L;
                         break;
                     case 0xE6: // AND A n8 2 8 Z 0 1 0
+                        numOpsQueued = 1;
                         break;
                     case 0xE7: // RST $20 1 16 - - - -
+                        numOpsQueued = 3;
                         break;
                     case 0xE8: // ADD SP e8 2 16 0 0 H C
+                        numOpsQueued = 3;
                         break;
                     case 0xE9: // JP HL 1 4 - - - -
                         break;
@@ -956,17 +1018,21 @@ void cpuTick() {
                     case 0xED: // ILLEGAL_ED 1 4 - - - -
                         break;
                     case 0xEE: // XOR A n8 2 8 Z 0 0 0
+                        numOpsQueued = 1;
                         break;
                     case 0xEF: // RST $28 1 16 - - - -
+                        numOpsQueued = 3;
                         break;
                     case 0xF0: // LDH A [a8] 2 12 - - - -
                         numOpsQueued = 2;
-                        opQ[1] = readByteToReg; pQ[0] = REGW_IDX; pQ[1] = ROMVAL;
-                        opQ[0] = readByteToReg; pQ[2] = REGA_IDX; pQ[3] = MMAPARR[0xFF | regs.arr8[REGW_IDX]];
+                        opQ[1] = readByteToReg; pQ[0] = REGZ_IDX; pQ[1] = ROMVAL;
+                        opQ[0] = readByteToReg; pQ[2] = REGA_IDX; pQ[3] = MMAPARR[0xFF | regs.arr8[REGZ_IDX]];
                         break;
                     case 0xF1: // POP AF 1 12 Z N H C
+                        numOpsQueued = 2;
                         break;
                     case 0xF2: // LDH A [C] 1 8 - - - -
+                        numOpsQueued = 1;
                         break;
                     case 0xF3: // DI 1 4 - - - -
                         break;
@@ -975,15 +1041,17 @@ void cpuTick() {
                     case 0xF5: // PUSH AF 1 16 - - - -
                         numOpsQueued = 3;
                         opQ[2] = decrementReg16; pQ[0] = REGSP_IDX;
-                        opQ[1] = writeByteToMemAndDec16;
-                        pQ[1] = regs.file.SP; pQ[2] = regs.file.AF.F; pQ[3] = REGSP_IDX;
-                        opQ[0] = writeByteToMem; pQ[4] = regs.file.SP; pQ[5] = regs.file.AF.A;
+                        opQ[1] = writeByteToMemAndDec16; pQ[1] = REGSP_IDX; pQ[2] = regs.file.AF.A;
+                        opQ[0] = writeByteToMem; pQ[3] = regs.file.SP; pQ[4] = regs.file.AF.F;
                         break;
                     case 0xF6: // OR A n8 2 8 Z 0 0 0
+                        numOpsQueued = 1;
                         break;
                     case 0xF7: // RST $30 1 16 - - - -
+                        numOpsQueued = 3;
                         break;
                     case 0xF8: // LD HL SP + e8 2 12 0 0 H C
+                        numOpsQueued = 2;
                         break;
                     case 0xF9: // LD SP HL 1 8 - - - -
                         numOpsQueued = 1;
@@ -992,6 +1060,7 @@ void cpuTick() {
                         opQ[0] = readByteToReg; pQ[2] = REGSPHI_IDX; pQ[3] = regs.file.HL.H;
                         break;
                     case 0xFA: // LD A [a16] 3 16 - - - -
+                        numOpsQueued = 3;
                         break;
                     case 0xFB: // EI 1 4 - - - -
                         break;
@@ -1004,41 +1073,44 @@ void cpuTick() {
                         opQ[0] = cmpImmediate; pQ[0] = ROMVAL;
                         break;
                     case 0xFF: // RST $38 1 16 - - - -
+                        numOpsQueued = 3;
                         break;
                 }
-            else
+            else {
                 switch (opcode) {
-                    case 0x0: // RLC B 2 8 Z 0 0 C
+                    case 0x00: // RLC B 2 8 Z 0 0 C
                         break;
-                    case 0x1: // RLC C 2 8 Z 0 0 C
+                    case 0x01: // RLC C 2 8 Z 0 0 C
                         break;
-                    case 0x2: // RLC D 2 8 Z 0 0 C
+                    case 0x02: // RLC D 2 8 Z 0 0 C
                         break;
-                    case 0x3: // RLC E 2 8 Z 0 0 C
+                    case 0x03: // RLC E 2 8 Z 0 0 C
                         break;
-                    case 0x4: // RLC H 2 8 Z 0 0 C
+                    case 0x04: // RLC H 2 8 Z 0 0 C
                         break;
-                    case 0x5: // RLC L 2 8 Z 0 0 C
+                    case 0x05: // RLC L 2 8 Z 0 0 C
                         break;
-                    case 0x6: // RLC [HL] 2 16 Z 0 0 C
+                    case 0x06: // RLC [HL] 2 16 Z 0 0 C
+                        numOpsQueued = 2;
                         break;
-                    case 0x7: // RLC A 2 8 Z 0 0 C
+                    case 0x07: // RLC A 2 8 Z 0 0 C
                         break;
-                    case 0x8: // RRC B 2 8 Z 0 0 C
+                    case 0x08: // RRC B 2 8 Z 0 0 C
                         break;
-                    case 0x9: // RRC C 2 8 Z 0 0 C
+                    case 0x09: // RRC C 2 8 Z 0 0 C
                         break;
-                    case 0xA: // RRC D 2 8 Z 0 0 C
+                    case 0x0A: // RRC D 2 8 Z 0 0 C
                         break;
-                    case 0xB: // RRC E 2 8 Z 0 0 C
+                    case 0x0B: // RRC E 2 8 Z 0 0 C
                         break;
-                    case 0xC: // RRC H 2 8 Z 0 0 C
+                    case 0x0C: // RRC H 2 8 Z 0 0 C
                         break;
-                    case 0xD: // RRC L 2 8 Z 0 0 C
+                    case 0x0D: // RRC L 2 8 Z 0 0 C
                         break;
-                    case 0xE: // RRC [HL] 2 16 Z 0 0 C
+                    case 0x0E: // RRC [HL] 2 16 Z 0 0 C
+                        numOpsQueued = 2;
                         break;
-                    case 0xF: // RRC A 2 8 Z 0 0 C
+                    case 0x0F: // RRC A 2 8 Z 0 0 C
                         break;
                     case 0x10: // RL B 2 8 Z 0 0 C
                         pQ[0] = REGB_IDX;
@@ -1065,6 +1137,7 @@ void cpuTick() {
                         rol();
                         break;
                     case 0x16: // RL [HL] 2 16 Z 0 0 C
+                        numOpsQueued = 2;
                         break;
                     case 0x17: // RL A 2 8 Z 0 0 C
                         pQ[0] = REGA_IDX;
@@ -1083,6 +1156,7 @@ void cpuTick() {
                     case 0x1D: // RR L 2 8 Z 0 0 C
                         break;
                     case 0x1E: // RR [HL] 2 16 Z 0 0 C
+                        numOpsQueued = 2;
                         break;
                     case 0x1F: // RR A 2 8 Z 0 0 C
                         break;
@@ -1099,6 +1173,7 @@ void cpuTick() {
                     case 0x25: // SLA L 2 8 Z 0 0 C
                         break;
                     case 0x26: // SLA [HL] 2 16 Z 0 0 C
+                        numOpsQueued = 2;
                         break;
                     case 0x27: // SLA A 2 8 Z 0 0 C
                         break;
@@ -1115,6 +1190,7 @@ void cpuTick() {
                     case 0x2D: // SRA L 2 8 Z 0 0 C
                         break;
                     case 0x2E: // SRA [HL] 2 16 Z 0 0 C
+                        numOpsQueued = 2;
                         break;
                     case 0x2F: // SRA A 2 8 Z 0 0 C
                         break;
@@ -1131,6 +1207,7 @@ void cpuTick() {
                     case 0x35: // SWAP L 2 8 Z 0 0 0
                         break;
                     case 0x36: // SWAP [HL] 2 16 Z 0 0 0
+                        numOpsQueued = 2;
                         break;
                     case 0x37: // SWAP A 2 8 Z 0 0 0
                         break;
@@ -1147,6 +1224,7 @@ void cpuTick() {
                     case 0x3D: // SRL L 2 8 Z 0 0 C
                         break;
                     case 0x3E: // SRL [HL] 2 16 Z 0 0 C
+                        numOpsQueued = 2;
                         break;
                     case 0x3F: // SRL A 2 8 Z 0 0 C
                         break;
@@ -1371,6 +1449,7 @@ void cpuTick() {
                     case 0x85: // RES 0 L 2 8 - - - -
                         break;
                     case 0x86: // RES 0 [HL] 2 16 - - - -
+                        numOpsQueued = 2;
                         break;
                     case 0x87: // RES 0 A 2 8 - - - -
                         break;
@@ -1387,6 +1466,7 @@ void cpuTick() {
                     case 0x8D: // RES 1 L 2 8 - - - -
                         break;
                     case 0x8E: // RES 1 [HL] 2 16 - - - -
+                        numOpsQueued = 2;
                         break;
                     case 0x8F: // RES 1 A 2 8 - - - -
                         break;
@@ -1403,6 +1483,7 @@ void cpuTick() {
                     case 0x95: // RES 2 L 2 8 - - - -
                         break;
                     case 0x96: // RES 2 [HL] 2 16 - - - -
+                        numOpsQueued = 2;
                         break;
                     case 0x97: // RES 2 A 2 8 - - - -
                         break;
@@ -1419,6 +1500,7 @@ void cpuTick() {
                     case 0x9D: // RES 3 L 2 8 - - - -
                         break;
                     case 0x9E: // RES 3 [HL] 2 16 - - - -
+                        numOpsQueued = 2;
                         break;
                     case 0x9F: // RES 3 A 2 8 - - - -
                         break;
@@ -1435,6 +1517,7 @@ void cpuTick() {
                     case 0xA5: // RES 4 L 2 8 - - - -
                         break;
                     case 0xA6: // RES 4 [HL] 2 16 - - - -
+                        numOpsQueued = 2;
                         break;
                     case 0xA7: // RES 4 A 2 8 - - - -
                         break;
@@ -1451,6 +1534,7 @@ void cpuTick() {
                     case 0xAD: // RES 5 L 2 8 - - - -
                         break;
                     case 0xAE: // RES 5 [HL] 2 16 - - - -
+                        numOpsQueued = 2;
                         break;
                     case 0xAF: // RES 5 A 2 8 - - - -
                         break;
@@ -1467,6 +1551,7 @@ void cpuTick() {
                     case 0xB5: // RES 6 L 2 8 - - - -
                         break;
                     case 0xB6: // RES 6 [HL] 2 16 - - - -
+                        numOpsQueued = 2;
                         break;
                     case 0xB7: // RES 6 A 2 8 - - - -
                         break;
@@ -1483,6 +1568,7 @@ void cpuTick() {
                     case 0xBD: // RES 7 L 2 8 - - - -
                         break;
                     case 0xBE: // RES 7 [HL] 2 16 - - - -
+                        numOpsQueued = 2;
                         break;
                     case 0xBF: // RES 7 A 2 8 - - - -
                         break;
@@ -1499,6 +1585,7 @@ void cpuTick() {
                     case 0xC5: // SET 0 L 2 8 - - - -
                         break;
                     case 0xC6: // SET 0 [HL] 2 16 - - - -
+                        numOpsQueued = 2;
                         break;
                     case 0xC7: // SET 0 A 2 8 - - - -
                         break;
@@ -1515,6 +1602,7 @@ void cpuTick() {
                     case 0xCD: // SET 1 L 2 8 - - - -
                         break;
                     case 0xCE: // SET 1 [HL] 2 16 - - - -
+                        numOpsQueued = 2;
                         break;
                     case 0xCF: // SET 1 A 2 8 - - - -
                         break;
@@ -1531,6 +1619,7 @@ void cpuTick() {
                     case 0xD5: // SET 2 L 2 8 - - - -
                         break;
                     case 0xD6: // SET 2 [HL] 2 16 - - - -
+                        numOpsQueued = 2;
                         break;
                     case 0xD7: // SET 2 A 2 8 - - - -
                         break;
@@ -1547,6 +1636,7 @@ void cpuTick() {
                     case 0xDD: // SET 3 L 2 8 - - - -
                         break;
                     case 0xDE: // SET 3 [HL] 2 16 - - - -
+                        numOpsQueued = 2;
                         break;
                     case 0xDF: // SET 3 A 2 8 - - - -
                         break;
@@ -1563,6 +1653,7 @@ void cpuTick() {
                     case 0xE5: // SET 4 L 2 8 - - - -
                         break;
                     case 0xE6: // SET 4 [HL] 2 16 - - - -
+                        numOpsQueued = 2;
                         break;
                     case 0xE7: // SET 4 A 2 8 - - - -
                         break;
@@ -1579,6 +1670,7 @@ void cpuTick() {
                     case 0xED: // SET 5 L 2 8 - - - -
                         break;
                     case 0xEE: // SET 5 [HL] 2 16 - - - -
+                        numOpsQueued = 2;
                         break;
                     case 0xEF: // SET 5 A 2 8 - - - -
                         break;
@@ -1595,6 +1687,7 @@ void cpuTick() {
                     case 0xF5: // SET 6 L 2 8 - - - -
                         break;
                     case 0xF6: // SET 6 [HL] 2 16 - - - -
+                        numOpsQueued = 2;
                         break;
                     case 0xF7: // SET 6 A 2 8 - - - -
                         break;
@@ -1611,15 +1704,18 @@ void cpuTick() {
                     case 0xFD: // SET 7 L 2 8 - - - -
                         break;
                     case 0xFE: // SET 7 [HL] 2 16 - - - -
+                        numOpsQueued = 2;
                         break;
                     case 0xFF: // SET 7 A 2 8 - - - -
                         break;
                 }
+                prefixedInstr = false;
+                break;
+            }
             break;
         case executeInstruction:
             opQ[--numOpsQueued]();
             if (numOpsQueued == 0) cpuState = fetchOpcode;
-            prefixedInstr = false;
             break;
     }
     if (numOpsQueued > 0) cpuState = executeInstruction;

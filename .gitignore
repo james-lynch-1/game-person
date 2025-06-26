@@ -5,3 +5,4 @@ gp
 dmg_boot.bin
 smlandbinary.txt
 source/opcodes-old.c
+cpu_instrs.gb
