@@ -94,13 +94,13 @@ typedef union Rom_ {
 
 typedef union VRam_ {
     struct VRam_s_ {
-        u16 block0[0x80];
-        u16 block1[0x80];
-        u16 block2[0x80];
+        u16 block0[0x800];
+        u16 block1[0x800];
+        u16 block2[0x800];
         u8 map0[0x400];
         u8 map1[0x400];
     } VRam_s;
-    u8 VRamArr[0x980];
+    u8 VRamArr[0x3800];
 } VRam;
 
 #define TILEID(addr)        addr / 16 % 256
