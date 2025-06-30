@@ -4,6 +4,7 @@
 #include "util.h"
 #include "ram.h"
 #include "registers.h"
+#include "type.h"
 
 // globals
 // values
@@ -13,19 +14,9 @@ extern int scale;
 extern int WINDOW_WIDTH;
 extern int WINDOW_HEIGHT;
 
-// cpu stuff
-extern int pc; // program counter - where we are in the ROM
-extern int ticks;
-enum CpuState {
-    fetchOpcode,
-    executeInstruction
-};
-extern enum CpuState cpuState;
-extern bool prefixedInstr;
-
-// structs
+extern CPU cpu;
+extern PPU ppu;
 extern MMap mMap;
-extern Registers regs;
 
 // renderer stuff
 extern int* gFrameBuffer;

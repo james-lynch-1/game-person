@@ -6,14 +6,12 @@ int scale;
 int WINDOW_WIDTH;
 int WINDOW_HEIGHT;
 
+PPU ppu;
+
 // cpu stuff
-int pc; // program counter - where we are in the ROM
-int ticks;
-enum CpuState cpuState;
-bool prefixedInstr;
 
 MMap mMap;
-Registers regs;
+CPU cpu;
 
 int* gFrameBuffer;
 SDL_Window* gSDLWindow;

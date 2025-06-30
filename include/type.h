@@ -12,8 +12,8 @@
 // helper macros
 #define MMAP        mMap.MMap_s // access memory map struct inside union more easily
 #define MMAPARR     mMap.mMapArr
-#define REGARR8     regs.arr8
-#define REGARR16    regs.arr16
+#define REGARR8     cpu.regs.arr8
+#define REGARR16    cpu.regs.arr16
 #define ROM         mMap.MMap_s.rom
 
 // magic addresses
@@ -21,39 +21,56 @@
 #define ROM_HEADER_ADDR 0x0100
 #define ROM_TITLE_ADDR  0x0134
 
+enum CpuState {
+    fetchOpcode,
+    executeInstruction
+};
+enum PPUState {
+    mode2, mode3, mode0, mode1 // OAM scan, drawing pixels, hBlank, vBlank
+};
+
+/* CPU */
+
 // Flags register
-#define FLAGS           regs.file.AF.F
+#define FLAGS           cpu.regs.file.AF.F
 #define ZERO_FLAG       0b10000000
 #define SUBTR_FLAG      0b01000000
 #define HALFCARRY_FLAG  0b00100000
 #define CARRY_FLAG      0b00010000
 
 typedef union Registers_ {
-    struct {
-        union AF_ {
-            u16 AF;
-            struct { u8 F; u8 A; }; // f: lower part, a: higher part
-        } AF;
-        union BC_ {
-            u16 BC;
-            struct { u8 C; u8 B; };
-        } BC;
-        union DE_ {
-            u16 DE;
-            struct { u8 E; u8 D; };
-        } DE;
-        union HL_ {
-            u16 HL;
-            struct { u8 L; u8 H; };
-        } HL;
-        u16 SP;
-        u16 PC;
-        u8 Z;
-        u8 W;
-    } file;
-    u16 arr16[7];
-    u8 arr8[14];
-} Registers;
+        struct {
+            union AF_ {
+                u16 AF;
+                struct { u8 F; u8 A; }; // f: lower part, a: higher part
+            } AF;
+            union BC_ {
+                u16 BC;
+                struct { u8 C; u8 B; };
+            } BC;
+            union DE_ {
+                u16 DE;
+                struct { u8 E; u8 D; };
+            } DE;
+            union HL_ {
+                u16 HL;
+                struct { u8 L; u8 H; };
+            } HL;
+            u16 SP;
+            u16 PC;
+            u8 Z;
+            u8 W;
+        } file;
+        u16 arr16[7];
+        u8 arr8[14];
+    } Registers;
+
+typedef struct CPU_ {
+    Registers regs;
+    int ticks;
+    enum CpuState state;
+    bool prefixedInstr;
+} CPU;
 
 // register indices in regs.arr8
 #define REGF_IDX    0
@@ -79,6 +96,15 @@ typedef union Registers_ {
 #define REGSP_IDX   4
 #define REGPC_IDX   5
 #define REGWZ_IDX   6
+
+/* PPU */
+
+typedef struct PPU_ {
+    enum PPUState state;
+    u32 ticks;
+    u8 LY;
+    u8 x;
+} PPU;
 
 
 

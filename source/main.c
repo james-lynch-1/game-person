@@ -55,21 +55,21 @@ int main(int argc, char* argv[]) {
     
     initialiseValues();
     fread(MMAP.rom.bank0_1, 4, 0x2000, romPtr);
-    while (1) {
-        // char pcHex[5];
-        // decToHex(MMAP.rom.bank0_1[pc], pcHex, 5);
-        // if (i % 4 == 0) printf("%s ", pcHex);
-        cpuTick();
-        // if (i % 4 == 0 && cpuState == fetchOpcode) printf("%x ", MMAP.rom.bank0_1[pc]);
-        // if (i % 4 == 0 && cpuState == fetchOpcode) printf("%d ", pc);
-    }
-    printf("\n");
-    char regLetters[] = {'F', 'A', 'C', 'B', 'E', 'D', 'L', 'H'};
-    for (int i = 0; i < 8; i++) {
-        printf("%c: %d\n", regLetters[i], regs.arr8[i]);
-    }
+    // while (1) {
+    //     // char pcHex[5];
+    //     // decToHex(MMAP.rom.bank0_1[pc], pcHex, 5);
+    //     // if (i % 4 == 0) printf("%s ", pcHex);
+    //     cpuTick();
+    //     // if (i % 4 == 0 && cpuState == fetchOpcode) printf("%x ", MMAP.rom.bank0_1[pc]);
+    //     // if (i % 4 == 0 && cpuState == fetchOpcode) printf("%d ", pc);
+    // }
+    // printf("\n");
+    // char regLetters[] = {'F', 'A', 'C', 'B', 'E', 'D', 'L', 'H'};
+    // for (int i = 0; i < 8; i++) {
+    //     printf("%c: %d\n", regLetters[i], regs.arr8[i]);
+    // }
 
-    return 0;
+    // return 0;
     if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS))
         return -1;
 
@@ -105,11 +105,13 @@ void initialiseValues() {
     WINDOW_WIDTH = 160 * scale;
     WINDOW_HEIGHT = 144 * scale;
 
-    pc = 0;
-    ticks = 0;
-    cpuState = fetchOpcode;
-    prefixedInstr = false;
+    ppu.state = mode2;
+
+    cpu.regs.file.PC = 0;
+    cpu.ticks = 0;
+    cpu.state = fetchOpcode;
+    cpu.prefixedInstr = false;
     for (int i = 0; i < 7; i++) {
-        regs.arr16[i] = 0;
+        cpu.regs.arr16[i] = 0;
     }
 }
