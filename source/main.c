@@ -1,5 +1,5 @@
 #include "main.h"
-
+int iter = 0;
 bool update() {
     SDL_Event e;
     if (SDL_PollEvent(&e)) {
@@ -12,8 +12,8 @@ bool update() {
     int pitch;
 
     SDL_LockTexture(gSDLTexture, NULL, (void**)&pix, &pitch);
-    for (int i = 0, sp = 0, dp = 0; i < WINDOW_HEIGHT; i++, dp += WINDOW_WIDTH, sp += pitch)
-        memcpy(pix + sp, gFrameBuffer + dp, WINDOW_WIDTH * 4);
+    for (int i = 0, sp = 0, dp = 0; i < 144; i++, dp += 160, sp += pitch)
+        memcpy(pix + sp, gFrameBuffer + dp, 160 * 4);
 
     SDL_UnlockTexture(gSDLTexture);
     SDL_RenderTexture(gSDLRenderer, gSDLTexture, NULL, NULL);
@@ -27,20 +27,26 @@ void putpixel(int x, int y, int colour) {
 }
 
 void render(Uint64 aTicks) {
-    for (int i = 0, c = 0; i < WINDOW_HEIGHT; i++) {
-        for (int j = 0; j < WINDOW_WIDTH; j++, c++) {
-            gFrameBuffer[c] = (int)(i * i + j * j + aTicks) | 0xff000000;
+    for (int i = 0, c = 0; i < 144; i++) {
+        for (int j = 0; j < 160; j++, c++) {
+            gFrameBuffer[c] = (int)(i * j + j) | 0xff000000;
         }
     }
 }
 
 void loop() {
+    for (int i = 0; i < 70224; i++) {
+        cpuTick();
+        ppuTick();
+    }
+    frameBufferIter = 0;
     if (!update()) {
         gDone = 1;
     }
-    else {
-        render(SDL_GetTicks());
-    }
+    iter++;
+    // else {
+    //     render(SDL_GetTicks());
+    // }
 }
 
 int main(int argc, char* argv[]) {
@@ -52,7 +58,7 @@ int main(int argc, char* argv[]) {
         printf("couldn't open file\n");
         exit(1);
     }
-    
+
     initialiseValues();
     fread(MMAP.rom.bank0_1, 4, 0x2000, romPtr);
     // while (1) {
@@ -77,10 +83,15 @@ int main(int argc, char* argv[]) {
     getTitle(title, romPtr);
     strncat(title, " - GamePerson", strlen(title) - 1);
 
-    gFrameBuffer = malloc(WINDOW_WIDTH * WINDOW_HEIGHT * sizeof(int));
+    SDL_SetDefaultTextureScaleMode(gSDLRenderer, SDL_SCALEMODE_NEAREST);
+    gFrameBuffer = malloc(160 * 144 * sizeof(int));
     gSDLWindow = SDL_CreateWindow(title, WINDOW_WIDTH, WINDOW_HEIGHT, 0);
     gSDLRenderer = SDL_CreateRenderer(gSDLWindow, NULL);
-    gSDLTexture = SDL_CreateTexture(gSDLRenderer, SDL_PIXELFORMAT_ABGR8888, SDL_TEXTUREACCESS_STREAMING, WINDOW_WIDTH, WINDOW_HEIGHT);
+    SDL_SetDefaultTextureScaleMode(gSDLRenderer, SDL_SCALEMODE_NEAREST);
+    // SDL_SetRenderLogicalPresentation(gSDLRenderer, WINDOW_WIDTH, WINDOW_HEIGHT, SDL_LOGICAL_PRESENTATION_INTEGER_SCALE);
+    gSDLTexture = SDL_CreateTexture(gSDLRenderer, SDL_PIXELFORMAT_ABGR8888, SDL_TEXTUREACCESS_STREAMING, 160, 144);
+
+    // SDL_SetTextureScaleMode(gSDLTexture, SDL_SCALEMODE_NEAREST);
 
     if (!gFrameBuffer || !gSDLWindow || !gSDLRenderer || !gSDLTexture)
         return -1;
@@ -99,19 +110,35 @@ int main(int argc, char* argv[]) {
     return 0;
 }
 
+void initialiseLCDProps() {
+    LCDPROPS.LCDC = 0b10010011;
+    LCDPROPS.LY = 0;
+}
+
 void initialiseValues() {
     maxFPS = 60;
-    scale = 4;
+    scale = 6;
     WINDOW_WIDTH = 160 * scale;
     WINDOW_HEIGHT = 144 * scale;
-
-    ppu.state = mode2;
+    frameBufferIter = 0;
+    colourArr[0] = 0xffffffff;
+    colourArr[1] = 0xffaaaaaa;
+    colourArr[2] = 0xff555555;
+    colourArr[3] = 0xff000000;
 
     cpu.regs.file.PC = 0;
     cpu.ticks = 0;
     cpu.state = fetchOpcode;
     cpu.prefixedInstr = false;
-    for (int i = 0; i < 7; i++) {
+    for (int i = 0; i < 7; i++)
         cpu.regs.arr16[i] = 0;
-    }
+
+    ppu.state = mode2;
+    ppu.ticks = 0;
+    ppu.x = 0;
+
+    initialiseLCDProps();
+
+    initialiseFIFO(&fetcher.bgFIFO);
+    initialiseFIFO(&fetcher.objFIFO);
 }

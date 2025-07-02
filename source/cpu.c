@@ -5,7 +5,9 @@
 
 void(*opQ[6])(); int numOpsQueued; // counts down. Always pre-decrement when using.
 int pQ[32]; int pIndex; // these act as parameters for the micro-ops. Counts up. Always post-inc.
+void(*miscOp)(); // miscellaneous operation to be done at the end of the opqueue but doesn't incur cycles
 
+extern int iter;
 // atomic ops:
 /*
 General:
@@ -40,11 +42,17 @@ update the cpu's internal state (effectively instantaneous)
 
 // do not incur cycles
 
+void doNothing() {
+    return;
+}
+
 void add() {
-    int a = (int)cpu.regs.file.AF.A + (int)cpu.regs.arr8[pQ[pIndex++]];
-    FLAGS = a == 0 ? ZERO_FLAG : 0 | (((a & 0b00010000) != 0) ? HALFCARRY_FLAG : 0) |
+    int a = cpu.regs.file.AF.A + REGARR8[pQ[pIndex]];
+    bool halfCarry = (cpu.regs.file.AF.A & 0xF) + (REGARR8[pQ[pIndex]] & 0xF) > 0xF;
+    FLAGS = (a & 0b11111111u) == 0 ? ZERO_FLAG : 0 | halfCarry << 5 |
         ((a > 0xFF) ? CARRY_FLAG : 0);
-    cpu.regs.file.AF.A = a & 0b11111111;
+    cpu.regs.file.AF.A = a & 0b11111111u;
+    pIndex++;
 }
 
 void xor (int b) {
@@ -53,29 +61,37 @@ void xor (int b) {
 }
 
 void sub() {
-    int a = cpu.regs.file.AF.A - cpu.regs.arr8[pQ[pIndex++]];
-    FLAGS = a == 0 ? ZERO_FLAG : 0 | SUBTR_FLAG |
-        (((a & 0b00010000) != 0) ? HALFCARRY_FLAG : 0) | ((a > 0xFF) ? CARRY_FLAG : 0);
+    int a = cpu.regs.file.AF.A - REGARR8[pQ[pIndex]];
+    bool halfCarry = ((int)cpu.regs.file.AF.A & 0xF) - ((int)REGARR8[pQ[pIndex]] & 0xF) < 0;
+    FLAGS = a == 0 ? ZERO_FLAG : 0 | SUBTR_FLAG | halfCarry << 5 | ((a < 0) ? CARRY_FLAG : 0);
     cpu.regs.file.AF.A = (u8)a;
+    pIndex++;
 }
 
 void rol() {
-    u8* r = &(cpu.regs.arr8[pQ[pIndex++]]);
+    u8* r = &(REGARR8[pQ[pIndex++]]);
     int leftmostBit = (*r & 0b10000000) != 0;
     *r = (*r << 1) | leftmostBit;
     FLAGS = ((*r == 0) ? ZERO_FLAG : 0) | leftmostBit << 4;
 }
 
 void cmp() {
-    int result = cpu.regs.file.AF.A - cpu.regs.arr8[pQ[pIndex++]];
+    int result = cpu.regs.file.AF.A - REGARR8[pQ[pIndex]];
+    bool halfCarry = ((int)cpu.regs.file.AF.A & 0xF) - ((int)REGARR8[pQ[pIndex]] & 0xF) < 0;
     FLAGS = ((result == 0) ? ZERO_FLAG : 0) | SUBTR_FLAG |
-        ((result & 0b00010000) ? HALFCARRY_FLAG : 0) | ((result & 0b10000000) ? CARRY_FLAG : 0);
+        halfCarry << 5 | ((result < 0) ? CARRY_FLAG : 0);
+    pIndex++;
+}
+
+void readByteToReg16() { // read 16-bit val to 16-bit reg. A misc op. 16-bit reg idx, value.
+    REGARR16[pQ[pIndex]] = pQ[pIndex + 1];
+    pIndex += 2;
 }
 
 // incur cycles
 
 void readToPC() {
-    cpu.regs.file.PC = cpu.regs.arr16[pQ[pIndex++]];
+    cpu.regs.file.PC = REGARR16[pQ[pIndex++]];
 }
 
 void readByteAndCmpBit() {
@@ -84,12 +100,12 @@ void readByteAndCmpBit() {
 }
 
 void readByteAndInc() { // increment the address you got it from
-    cpu.regs.arr8[pQ[pIndex]] = MMAPARR[cpu.regs.arr16[pQ[pIndex + 1]]];
-    cpu.regs.arr16[pQ[pIndex + 1]]++;
+    REGARR8[pQ[pIndex]] = MMAPARR[REGARR16[pQ[pIndex + 1]]];
+    REGARR16[pQ[pIndex + 1]]++;
     pIndex += 2;
 }
 
-void readByteToReg() { // dest cpu.regs.arr8 index, val: a value
+void readByteToReg() { // dest REGARR8 index, val: a value
     int dest = pQ[pIndex++];
     int val = pQ[pIndex++];
     REGARR8[dest] = val;
@@ -98,27 +114,37 @@ void readByteToReg() { // dest cpu.regs.arr8 index, val: a value
 void readByteAndIncAndWrite() { // dest reg index, src 16bit reg index, (dest reg index, src val)*2
     readByteAndInc();
     readByteToReg();
+    readByteToReg();
 }
 
 void readByteAndXor() {
-    cpu.regs.arr8[pQ[pIndex]] = MMAPARR[cpu.regs.arr16[pQ[pIndex + 1]]];
-    xor (cpu.regs.arr8[pQ[pIndex]]);
+    REGARR8[pQ[pIndex]] = MMAPARR[REGARR16[pQ[pIndex + 1]]];
+    xor (REGARR8[pQ[pIndex]]);
     pIndex += 2;
 }
 
-void writeByteToMem() {
+void writeByteToHighMem() { // address, value
     MMAPARR[pQ[pIndex]] = pQ[pIndex + 1];
+    pIndex += 2;
+}
+
+void writeByteToMem() { // index of 16-bit reg holding address, value
+    MMAPARR[REGARR16[pQ[pIndex]]] = pQ[pIndex + 1];
     pIndex += 2;
 }
 
 void writeByteToMemAndDec() { // decrement the reg that held the dest addr
-    MMAPARR[pQ[pIndex]] = pQ[pIndex + 1];
-    cpu.regs.arr16[pQ[pIndex]]--;
+    MMAPARR[REGARR16[pQ[pIndex]]] = pQ[pIndex + 1];
+    REGARR16[pQ[pIndex]]--;
     pIndex += 2;
 }
 
-void jump() {
+void jump() { // jump to value provided
     cpu.regs.file.PC = pQ[pIndex++];
+}
+
+void jumpToRegAddr() { // jump to value in register at provided 16-bit index
+    cpu.regs.file.PC = REGARR16[pQ[pIndex++]];
 }
 
 void cmpJR() {
@@ -131,49 +157,52 @@ void cmpJR() {
 }
 
 void cmpImmediate() {
-    u8 result = cpu.regs.file.AF.A - pQ[pIndex];
+    int result = cpu.regs.file.AF.A - pQ[pIndex];
     int zero = result == 0 ? ZERO_FLAG : 0;
-    int halfCarry = ((cpu.regs.file.AF.A & 15) < (pQ[pIndex] & 15)) << 5;
-    int carry = result & 0b10000000 ? CARRY_FLAG : 0;
+    int halfCarry = ((int)(cpu.regs.file.AF.A & 0xF) - (int)(pQ[pIndex] & 0xF) < 0) << 5;
+    int carry = result < 0 ? CARRY_FLAG : 0;
     FLAGS = zero | SUBTR_FLAG | halfCarry | carry;
     pIndex++;
 }
 
 void incrementReg16() {
-    cpu.regs.arr16[pQ[pIndex++]]--;
+    REGARR16[pQ[pIndex++]]++;
 }
 
 void decrementReg16() {
-    cpu.regs.arr16[pQ[pIndex++]]--;
+    REGARR16[pQ[pIndex++]]--;
 }
 
 void incrementReg8() {
-    u8* regPtr = &(cpu.regs.arr8[pQ[pIndex++]]);
-    int result = ++(*regPtr);
-    int zero = result == 0 ? ZERO_FLAG : 0;
-    int halfCarry = result & 0b00010000 ? HALFCARRY_FLAG : 0;
-    FLAGS |= zero | halfCarry;
-    FLAGS &= ~SUBTR_FLAG;
+    u8* regPtr = &(REGARR8[pQ[pIndex++]]);
+    int initVal = *regPtr;
+    int result = initVal + 1;
+    int zero = (result == 0) << 7;
+    int halfCarry = (((initVal & 0xF) + 1) > 0xF) << 5;
+    FLAGS = zero | halfCarry | (FLAGS & CARRY_FLAG);
+    (*regPtr)++;
 }
 
 void decrementReg8() {
-    u8* regPtr = &(cpu.regs.arr8[pQ[pIndex++]]);
-    int result = --(*regPtr);
-    int zero = result == 0 ? ZERO_FLAG : 0;
-    int halfCarry = result & 0b00010000 ? HALFCARRY_FLAG : 0;
-    FLAGS |= zero | SUBTR_FLAG | halfCarry;
+    u8* regPtr = &(REGARR8[pQ[pIndex++]]);
+    int initVal = *regPtr;
+    int result = initVal - 1;
+    int zero = (result == 0) << 7;
+    int halfCarry = (((initVal & 0xF) - 1) < 0) << 5;
+    FLAGS = zero | SUBTR_FLAG | halfCarry | (FLAGS & CARRY_FLAG);
+    (*regPtr)--;
 }
 
 // write to a mem address and decrement supplied 16 bit reg
-void writeByteToMemAndDec16() { // val of reg, data to write, index of reg
-    MMAPARR[cpu.regs.arr16[pQ[pIndex]]] = pQ[pIndex + 1];
-    cpu.regs.arr16[pIndex]--;
+void writeByteToMemAndDec16() { // index of 16-bit reg holding address, data to write
+    MMAPARR[REGARR16[pQ[pIndex]]] = pQ[pIndex + 1];
+    REGARR16[pQ[pIndex]]--;
     pIndex += 2;
 }
 
 void writeByteToMemAndInc16() { // dest: mmaparr index, val: value
-    MMAPARR[cpu.regs.arr16[pQ[pIndex]]] = pQ[pIndex + 1];
-    cpu.regs.arr16[pIndex]++;
+    MMAPARR[REGARR16[pQ[pIndex]]] = pQ[pIndex + 1];
+    REGARR16[pQ[pIndex]]++;
     pIndex += 2;
 }
 
@@ -192,12 +221,14 @@ void cpuTick() {
     if (++cpu.ticks < 4) return;
     cpu.ticks = 0;
     u8 opcode;
-
     switch (cpu.state) {
         case fetchOpcode:
+            miscOp = doNothing;
             pIndex = 0;
             numOpsQueued = 0;
             opcode = MMAP.rom.bank0_1[cpu.regs.file.PC++];
+            if (cpu.regs.file.PC == 0x35)
+                printf("here\n");
             if (!cpu.prefixedInstr)
                 switch (opcode) {
                     case 0x00: // NOP 1 4 - - - -
@@ -280,19 +311,19 @@ void cpuTick() {
                     case 0x17: // RLA 1 4 0 0 0 C
                         pQ[0] = REGA_IDX;
                         rol();
-                        FLAGS &= (u8)~ZERO_FLAG;
+                        FLAGS = FLAGS & CARRY_FLAG;
                         break;
                     case 0x18: // JR e8 2 12 - - - -
                         numOpsQueued = 2;
                         opQ[1] = readByteToReg; pQ[0] = REGW_IDX; pQ[1] = ROMVAL;
-                        opQ[0] = jump; pQ[2] = cpu.regs.file.PC + cpu.regs.arr8[REGW_IDX];
+                        opQ[0] = jump; pQ[2] = cpu.regs.file.PC + REGARR8[REGW_IDX];
                         break;
                     case 0x19: // ADD HL DE 1 8 - 0 H C
                         numOpsQueued = 1;
                         break;
                     case 0x1A: // LD A [DE] 1 8 - - - -
                         numOpsQueued = 1;
-                        opQ[0] = readByteToReg; pQ[0] = REGA_IDX; pQ[1] = MMAPARR[cpu.regs.arr16[REGDE_IDX]];
+                        opQ[0] = readByteToReg; pQ[0] = REGA_IDX; pQ[1] = MMAPARR[cpu.regs.file.DE.DE];
                         break;
                     case 0x1B: // DEC DE 1 8 - - - -
                         numOpsQueued = 1;
@@ -421,189 +452,189 @@ void cpuTick() {
                     case 0x3F: // CCF 1 4 - 0 0 C
                         break;
                     case 0x40: // LD B B 1 4 - - - -
-                        pQ[0] = REGB_IDX; pQ[1] = REGB_IDX;
+                        pQ[0] = REGB_IDX; pQ[1] = cpu.regs.file.BC.B;
                         readByteToReg();
                         break;
                     case 0x41: // LD B C 1 4 - - - -
-                        pQ[0] = REGB_IDX; pQ[1] = REGC_IDX;
+                        pQ[0] = REGB_IDX; pQ[1] = cpu.regs.file.BC.C;
                         readByteToReg();
                         break;
                     case 0x42: // LD B D 1 4 - - - -
-                        pQ[0] = REGB_IDX; pQ[1] = REGD_IDX;
+                        pQ[0] = REGB_IDX; pQ[1] = cpu.regs.file.DE.D;
                         readByteToReg();
                         break;
                     case 0x43: // LD B E 1 4 - - - -
-                        pQ[0] = REGB_IDX; pQ[1] = REGE_IDX;
+                        pQ[0] = REGB_IDX; pQ[1] = cpu.regs.file.DE.E;
                         readByteToReg();
                         break;
                     case 0x44: // LD B H 1 4 - - - -
-                        pQ[0] = REGB_IDX; pQ[1] = REGH_IDX;
+                        pQ[0] = REGB_IDX; pQ[1] = cpu.regs.file.HL.H;
                         readByteToReg();
                         break;
                     case 0x45: // LD B L 1 4 - - - -
-                        pQ[0] = REGB_IDX; pQ[1] = REGL_IDX;
+                        pQ[0] = REGB_IDX; pQ[1] = cpu.regs.file.HL.L;
                         readByteToReg();
                         break;
                     case 0x46: // LD B [HL] 1 8 - - - -
                         numOpsQueued = 1;
                         break;
                     case 0x47: // LD B A 1 4 - - - -
-                        pQ[0] = REGB_IDX; pQ[1] = REGA_IDX;
+                        pQ[0] = REGB_IDX; pQ[1] = cpu.regs.file.AF.A;
                         readByteToReg();
                         break;
                     case 0x48: // LD C B 1 4 - - - -
-                        pQ[0] = REGC_IDX; pQ[1] = REGB_IDX;
+                        pQ[0] = REGC_IDX; pQ[1] = cpu.regs.file.BC.B;
                         readByteToReg();
                         break;
                     case 0x49: // LD C C 1 4 - - - -
-                        pQ[0] = REGC_IDX; pQ[1] = REGC_IDX;
+                        pQ[0] = REGC_IDX; pQ[1] = cpu.regs.file.BC.C;
                         readByteToReg();
                         break;
                     case 0x4A: // LD C D 1 4 - - - -
-                        pQ[0] = REGC_IDX; pQ[1] = REGD_IDX;
+                        pQ[0] = REGC_IDX; pQ[1] = cpu.regs.file.DE.D;
                         readByteToReg();
                         break;
                     case 0x4B: // LD C E 1 4 - - - -
-                        pQ[0] = REGC_IDX; pQ[1] = REGE_IDX;
+                        pQ[0] = REGC_IDX; pQ[1] = cpu.regs.file.DE.E;
                         readByteToReg();
                         break;
                     case 0x4C: // LD C H 1 4 - - - -
-                        pQ[0] = REGC_IDX; pQ[1] = REGH_IDX;
+                        pQ[0] = REGC_IDX; pQ[1] = cpu.regs.file.HL.H;
                         readByteToReg();
                         break;
                     case 0x4D: // LD C L 1 4 - - - -
-                        pQ[0] = REGC_IDX; pQ[1] = REGL_IDX;
+                        pQ[0] = REGC_IDX; pQ[1] = cpu.regs.file.HL.L;
                         readByteToReg();
                         break;
                     case 0x4E: // LD C [HL] 1 8 - - - -
                         numOpsQueued = 1;
                         break;
                     case 0x4F: // LD C A 1 4 - - - -
-                        pQ[0] = REGC_IDX; pQ[1] = REGA_IDX;
+                        pQ[0] = REGC_IDX; pQ[1] = cpu.regs.file.AF.A;
                         readByteToReg();
                         break;
                     case 0x50: // LD D B 1 4 - - - -
-                        pQ[0] = REGD_IDX; pQ[1] = REGB_IDX;
+                        pQ[0] = REGD_IDX; pQ[1] = cpu.regs.file.BC.B;
                         readByteToReg();
                         break;
                     case 0x51: // LD D C 1 4 - - - -
-                        pQ[0] = REGD_IDX; pQ[1] = REGC_IDX;
+                        pQ[0] = REGD_IDX; pQ[1] = cpu.regs.file.BC.C;
                         readByteToReg();
                         break;
                     case 0x52: // LD D D 1 4 - - - -
-                        pQ[0] = REGD_IDX; pQ[1] = REGD_IDX;
+                        pQ[0] = REGD_IDX; pQ[1] = cpu.regs.file.DE.D;
                         readByteToReg();
                         break;
                     case 0x53: // LD D E 1 4 - - - -
-                        pQ[0] = REGD_IDX; pQ[1] = REGE_IDX;
+                        pQ[0] = REGD_IDX; pQ[1] = cpu.regs.file.DE.E;
                         readByteToReg();
                         break;
                     case 0x54: // LD D H 1 4 - - - -
-                        pQ[0] = REGD_IDX; pQ[1] = REGH_IDX;
+                        pQ[0] = REGD_IDX; pQ[1] = cpu.regs.file.HL.H;
                         readByteToReg();
                         break;
                     case 0x55: // LD D L 1 4 - - - -
-                        pQ[0] = REGD_IDX; pQ[1] = REGL_IDX;
+                        pQ[0] = REGD_IDX; pQ[1] = cpu.regs.file.HL.L;
                         readByteToReg();
                         break;
                     case 0x56: // LD D [HL] 1 8 - - - -
                         numOpsQueued = 1;
                         break;
                     case 0x57: // LD D A 1 4 - - - -
-                        pQ[0] = REGD_IDX; pQ[1] = REGA_IDX;
+                        pQ[0] = REGD_IDX; pQ[1] = cpu.regs.file.AF.A;
                         readByteToReg();
                         break;
                     case 0x58: // LD E B 1 4 - - - -
-                        pQ[0] = REGE_IDX; pQ[1] = REGB_IDX;
+                        pQ[0] = REGE_IDX; pQ[1] = cpu.regs.file.BC.B;
                         readByteToReg();
                         break;
                     case 0x59: // LD E C 1 4 - - - -
-                        pQ[0] = REGE_IDX; pQ[1] = REGC_IDX;
+                        pQ[0] = REGE_IDX; pQ[1] = cpu.regs.file.BC.C;
                         readByteToReg();
                         break;
                     case 0x5A: // LD E D 1 4 - - - -
-                        pQ[0] = REGE_IDX; pQ[1] = REGD_IDX;
+                        pQ[0] = REGE_IDX; pQ[1] = cpu.regs.file.DE.D;
                         readByteToReg();
                         break;
                     case 0x5B: // LD E E 1 4 - - - -
-                        pQ[0] = REGE_IDX; pQ[1] = REGE_IDX;
+                        pQ[0] = REGE_IDX; pQ[1] = cpu.regs.file.DE.E;
                         readByteToReg();
                         break;
                     case 0x5C: // LD E H 1 4 - - - -
-                        pQ[0] = REGE_IDX; pQ[1] = REGH_IDX;
+                        pQ[0] = REGE_IDX; pQ[1] = cpu.regs.file.HL.H;
                         readByteToReg();
                         break;
                     case 0x5D: // LD E L 1 4 - - - -
-                        pQ[0] = REGE_IDX; pQ[1] = REGL_IDX;
+                        pQ[0] = REGE_IDX; pQ[1] = cpu.regs.file.HL.L;
                         readByteToReg();
                         break;
                     case 0x5E: // LD E [HL] 1 8 - - - -
                         numOpsQueued = 1;
                         break;
                     case 0x5F: // LD E A 1 4 - - - -
-                        pQ[0] = REGE_IDX; pQ[1] = REGA_IDX;
+                        pQ[0] = REGE_IDX; pQ[1] = cpu.regs.file.AF.A;
                         readByteToReg();
                         break;
                     case 0x60: // LD H B 1 4 - - - -
-                        pQ[0] = REGH_IDX; pQ[1] = REGB_IDX;
+                        pQ[0] = REGH_IDX; pQ[1] = cpu.regs.file.BC.B;
                         readByteToReg();
                         break;
                     case 0x61: // LD H C 1 4 - - - -
-                        pQ[0] = REGH_IDX; pQ[1] = REGC_IDX;
+                        pQ[0] = REGH_IDX; pQ[1] = cpu.regs.file.BC.C;
                         readByteToReg();
                         break;
                     case 0x62: // LD H D 1 4 - - - -
-                        pQ[0] = REGH_IDX; pQ[1] = REGD_IDX;
+                        pQ[0] = REGH_IDX; pQ[1] = cpu.regs.file.DE.D;
                         readByteToReg();
                         break;
                     case 0x63: // LD H E 1 4 - - - -
-                        pQ[0] = REGH_IDX; pQ[1] = REGE_IDX;
+                        pQ[0] = REGH_IDX; pQ[1] = cpu.regs.file.DE.E;
                         readByteToReg();
                         break;
                     case 0x64: // LD H H 1 4 - - - -
-                        pQ[0] = REGH_IDX; pQ[1] = REGH_IDX;
+                        pQ[0] = REGH_IDX; pQ[1] = cpu.regs.file.HL.H;
                         readByteToReg();
                         break;
                     case 0x65: // LD H L 1 4 - - - -
-                        pQ[0] = REGH_IDX; pQ[1] = REGL_IDX;
+                        pQ[0] = REGH_IDX; pQ[1] = cpu.regs.file.HL.L;
                         readByteToReg();
                         break;
                     case 0x66: // LD H [HL] 1 8 - - - -
                         numOpsQueued = 1;
                         break;
                     case 0x67: // LD H A 1 4 - - - -
-                        pQ[0] = REGH_IDX; pQ[1] = REGA_IDX;
+                        pQ[0] = REGH_IDX; pQ[1] = cpu.regs.file.AF.A;
                         readByteToReg();
                         break;
                     case 0x68: // LD L B 1 4 - - - -
-                        pQ[0] = REGL_IDX; pQ[1] = REGB_IDX;
+                        pQ[0] = REGL_IDX; pQ[1] = cpu.regs.file.BC.B;
                         readByteToReg();
                         break;
                     case 0x69: // LD L C 1 4 - - - -
-                        pQ[0] = REGL_IDX; pQ[1] = REGC_IDX;
+                        pQ[0] = REGL_IDX; pQ[1] = cpu.regs.file.BC.C;
                         readByteToReg();
                         break;
                     case 0x6A: // LD L D 1 4 - - - -
-                        pQ[0] = REGL_IDX; pQ[1] = REGD_IDX;
+                        pQ[0] = REGL_IDX; pQ[1] = cpu.regs.file.DE.D;
                         readByteToReg();
                         break;
                     case 0x6B: // LD L E 1 4 - - - -
-                        pQ[0] = REGL_IDX; pQ[1] = REGE_IDX;
+                        pQ[0] = REGL_IDX; pQ[1] = cpu.regs.file.DE.E;
                         readByteToReg();
                         break;
                     case 0x6C: // LD L H 1 4 - - - -
-                        pQ[0] = REGL_IDX; pQ[1] = REGH_IDX;
+                        pQ[0] = REGL_IDX; pQ[1] = cpu.regs.file.HL.H;
                         readByteToReg();
                         break;
                     case 0x6D: // LD L L 1 4 - - - -
-                        pQ[0] = REGL_IDX; pQ[1] = REGL_IDX;
+                        pQ[0] = REGL_IDX; pQ[1] = cpu.regs.file.HL.L;
                         readByteToReg();
                         break;
                     case 0x6E: // LD L [HL] 1 8 - - - -
                         numOpsQueued = 1;
                         break;
                     case 0x6F: // LD L A 1 4 - - - -
-                        pQ[0] = REGL_IDX; pQ[1] = REGA_IDX;
+                        pQ[0] = REGL_IDX; pQ[1] = cpu.regs.file.AF.A;
                         readByteToReg();
                         break;
                     case 0x70: // LD [HL] B 1 8 - - - -
@@ -629,7 +660,7 @@ void cpuTick() {
                     case 0x77: // LD [HL] A 1 8 - - - -
                         numOpsQueued = 1;
                         opQ[0] = writeByteToMem;
-                        pQ[0] = cpu.regs.file.HL.HL; pQ[1] = cpu.regs.file.AF.A;
+                        pQ[0] = REGHL_IDX; pQ[1] = cpu.regs.file.AF.A;
                         break;
                     case 0x78: // LD A B 1 4 - - - -
                         pQ[0] = REGA_IDX; pQ[1] = cpu.regs.file.BC.B;
@@ -657,7 +688,7 @@ void cpuTick() {
                         break;
                     case 0x7E: // LD A [HL] 1 8 - - - -
                         numOpsQueued = 1;
-                        opQ[0] = readByteToReg; pQ[0] = REGA_IDX; pQ[1] = cpu.regs.arr16[REGHL_IDX];
+                        opQ[0] = readByteToReg; pQ[0] = REGA_IDX; pQ[1] = MMAPARR[cpu.regs.file.HL.HL];
                         break;
                     case 0x7F: // LD A A 1 4 - - - -
                         numOpsQueued = 1;
@@ -689,9 +720,9 @@ void cpuTick() {
                         break;
                     case 0x86: // ADD A [HL] 1 8 Z 0 H C
                         numOpsQueued = 1;
-                        pQ[0] = REGW_IDX; pQ[1] = cpu.regs.file.HL.HL;
+                        pQ[0] = REGW_IDX; pQ[1] = MMAPARR[cpu.regs.file.HL.HL];
                         readByteToReg();
-                        opQ[0] = add; pQ[2] = cpu.regs.arr8[REGW_IDX];
+                        opQ[0] = add; pQ[2] = REGARR8[REGW_IDX];
                         break;
                     case 0x87: // ADD A A 1 4 Z 0 H C
                         pQ[0] = REGA_IDX;
@@ -801,7 +832,7 @@ void cpuTick() {
                         break;
                     case 0xAE: // XOR A [HL] 1 8 Z 0 0 0
                         numOpsQueued = 1;
-                        opQ[0] = readByteAndXor; pQ[0] = REGW_IDX; pQ[1] = cpu.regs.arr16[REGHL_IDX];
+                        opQ[0] = readByteAndXor; pQ[0] = REGW_IDX; pQ[1] = REGARR16[REGHL_IDX];
                         break;
                     case 0xAF: // XOR A A 1 4 Z 0 0 0
                         xor (cpu.regs.file.AF.A);
@@ -849,7 +880,7 @@ void cpuTick() {
                         break;
                     case 0xBE: // CP A [HL] 1 8 Z 1 H C
                         numOpsQueued = 1;
-                        pQ[0] = REGW_IDX; pQ[1] = cpu.regs.file.HL.HL;
+                        pQ[0] = REGW_IDX; pQ[1] = MMAPARR[cpu.regs.file.HL.HL];
                         readByteToReg();
                         opQ[0] = cmp; pQ[2] = REGW_IDX;
                         break;
@@ -860,13 +891,12 @@ void cpuTick() {
                     case 0xC0: // RET NZ 1 20/8 - - - -
                         numOpsQueued = 1;
                         break;
-                    case 0xC1: // POP BC 1 12 - - - - PROBLEMATIC
+                    case 0xC1: // POP BC 1 12 - - - -
                         numOpsQueued = 2;
-                        opQ[1] = readByteAndInc; pQ[0] = REGW_IDX; pQ[1] = REGSP_IDX;
-                        opQ[0] = readByteAndIncAndWrite;
-                        pQ[2] = REGZ_IDX; pQ[3] = REGSP_IDX;
-                        pQ[4] = REGB_IDX; pQ[5] = REGZ_IDX;
-                        pQ[6] = REGC_IDX; pQ[7] = REGW_IDX;
+                        opQ[1] = readByteAndInc; pQ[0] = REGZ_IDX; pQ[1] = REGSP_IDX;
+                        opQ[0] = readByteAndInc; pQ[2] = REGW_IDX; pQ[3] = REGSP_IDX;
+                        miscOp = readByteToReg16; pQ[4] = REGBC_IDX;
+                        pQ[5] = (MMAPARR[REGARR16[REGSP_IDX]]) | (MMAPARR[REGARR16[REGSP_IDX] + 1] << 8);
                         break;
                     case 0xC2: // JP NZ a16 3 16/12 - - - -
                         numOpsQueued = 2;
@@ -880,8 +910,8 @@ void cpuTick() {
                     case 0xC5: // PUSH BC 1 16 - - - -
                         numOpsQueued = 3;
                         opQ[2] = decrementReg16; pQ[0] = REGSP_IDX;
-                        opQ[1] = writeByteToMemAndDec16; pQ[1] = REGSP_IDX; pQ[2] = cpu.regs.file.BC.C;
-                        opQ[0] = writeByteToMem; pQ[3] = cpu.regs.file.SP; pQ[4] = cpu.regs.file.BC.B;
+                        opQ[1] = writeByteToMemAndDec16; pQ[1] = REGSP_IDX; pQ[2] = cpu.regs.file.BC.B;
+                        opQ[0] = writeByteToMem; pQ[3] = REGSP_IDX; pQ[4] = cpu.regs.file.BC.C;
                         break;
                     case 0xC6: // ADD A n8 2 8 Z 0 H C
                         numOpsQueued = 1;
@@ -894,8 +924,8 @@ void cpuTick() {
                         break;
                     case 0xC9: // RET 1 16 - - - -
                         numOpsQueued = 3;
-                        opQ[2] = readByteAndInc; pQ[0] = REGW_IDX; pQ[1] = REGSP_IDX;
-                        opQ[1] = readByteAndInc; pQ[2] = REGZ_IDX; pQ[3] = REGSP_IDX;
+                        opQ[2] = readByteAndInc; pQ[0] = REGZ_IDX; pQ[1] = REGSP_IDX;
+                        opQ[1] = readByteAndInc; pQ[2] = REGW_IDX; pQ[3] = REGSP_IDX;
                         opQ[0] = readToPC; pQ[4] = REGWZ_IDX;
                         break;
                     case 0xCA: // JP Z a16 3 16/12 - - - -
@@ -912,8 +942,11 @@ void cpuTick() {
                         opQ[4] = readByteToReg; pQ[0] = REGZ_IDX; pQ[1] = ROMVAL;
                         opQ[3] = readByteToReg; pQ[2] = REGW_IDX; pQ[3] = ROMVAL;
                         opQ[2] = decrementReg16; pQ[4] = REGSP_IDX;
-                        opQ[1] = writeByteToMemAndDec16; pQ[5] = REGSP_IDX; pQ[6] = REGW_IDX;
-                        opQ[0] = writeByteToMem; pQ[7] = REGSP_IDX; pQ[8] = REGZ_IDX;
+                        opQ[1] = writeByteToMemAndDec16;
+                        pQ[5] = REGSP_IDX; pQ[6] = cpu.regs.file.PC & 0xFF00;
+                        opQ[0] = writeByteToMem;
+                        pQ[7] = REGSP_IDX; pQ[8] = cpu.regs.file.PC & 0xFF;
+                        miscOp = jumpToRegAddr; pQ[9] = REGWZ_IDX;
                         break;
                     case 0xCE: // ADC A n8 2 8 Z 0 H C
                         numOpsQueued = 1;
@@ -939,7 +972,7 @@ void cpuTick() {
                         numOpsQueued = 3;
                         opQ[2] = decrementReg16; pQ[0] = REGSP_IDX;
                         opQ[1] = writeByteToMemAndDec16; pQ[1] = REGSP_IDX; pQ[2] = cpu.regs.file.DE.D;
-                        opQ[0] = writeByteToMem; pQ[3] = cpu.regs.file.SP; pQ[4] = cpu.regs.file.DE.E;
+                        opQ[0] = writeByteToMem; pQ[3] = REGSP_IDX; pQ[4] = cpu.regs.file.DE.E;
                         break;
                     case 0xD6: // SUB A n8 2 8 Z 1 H C
                         numOpsQueued = 1;
@@ -971,18 +1004,17 @@ void cpuTick() {
                         break;
                     case 0xE0: // LDH [a8] A 2 12 - - - -
                         numOpsQueued = 2;
-                        opQ[1] = readByteToReg;
-                        opQ[0] = writeByteToMem;
-                        pQ[0] = REGZ_IDX; pQ[1] = ROMVAL;
-                        pQ[2] = 0xFF00 + REGARR8[REGZ_IDX]; pQ[3] = cpu.regs.file.AF.A;
+                        opQ[1] = readByteToReg; pQ[0] = REGZ_IDX; pQ[1] = ROMVAL;
+                        opQ[0] = writeByteToHighMem;
+                        pQ[2] = 0xFF00 | pQ[1]; pQ[3] = cpu.regs.file.AF.A;
                         break;
                     case 0xE1: // POP HL 1 12 - - - -
                         numOpsQueued = 2;
                         break;
                     case 0xE2: // LDH [C] A 1 8 - - - -
                         numOpsQueued = 1;
-                        opQ[0] = writeByteToMem;
-                        pQ[0] = 0xFF00 + cpu.regs.file.BC.C; pQ[1] = cpu.regs.file.AF.A;
+                        opQ[0] = writeByteToHighMem;
+                        pQ[0] = 0xFF00 | cpu.regs.file.BC.C; pQ[1] = cpu.regs.file.AF.A;
                         break;
                     case 0xE3: // ILLEGAL_E3 1 4 - - - -
                         break;
@@ -992,7 +1024,7 @@ void cpuTick() {
                         numOpsQueued = 3;
                         opQ[2] = decrementReg16; pQ[0] = REGSP_IDX;
                         opQ[1] = writeByteToMemAndDec16; pQ[1] = REGSP_IDX; pQ[2] = cpu.regs.file.HL.H;
-                        opQ[0] = writeByteToMem; pQ[3] = cpu.regs.file.SP; pQ[4] = cpu.regs.file.HL.L;
+                        opQ[0] = writeByteToMem; pQ[3] = REGSP_IDX; pQ[4] = cpu.regs.file.HL.L;
                         break;
                     case 0xE6: // AND A n8 2 8 Z 0 1 0
                         numOpsQueued = 1;
@@ -1026,7 +1058,7 @@ void cpuTick() {
                     case 0xF0: // LDH A [a8] 2 12 - - - -
                         numOpsQueued = 2;
                         opQ[1] = readByteToReg; pQ[0] = REGZ_IDX; pQ[1] = ROMVAL;
-                        opQ[0] = readByteToReg; pQ[2] = REGA_IDX; pQ[3] = MMAPARR[0xFF | cpu.regs.arr8[REGZ_IDX]];
+                        opQ[0] = readByteToReg; pQ[2] = REGA_IDX; pQ[3] = MMAPARR[0xFF00 | pQ[1]];
                         break;
                     case 0xF1: // POP AF 1 12 Z N H C
                         numOpsQueued = 2;
@@ -1042,7 +1074,7 @@ void cpuTick() {
                         numOpsQueued = 3;
                         opQ[2] = decrementReg16; pQ[0] = REGSP_IDX;
                         opQ[1] = writeByteToMemAndDec16; pQ[1] = REGSP_IDX; pQ[2] = cpu.regs.file.AF.A;
-                        opQ[0] = writeByteToMem; pQ[3] = cpu.regs.file.SP; pQ[4] = cpu.regs.file.AF.F;
+                        opQ[0] = writeByteToMem; pQ[3] = REGSP_IDX; pQ[4] = cpu.regs.file.AF.F;
                         break;
                     case 0xF6: // OR A n8 2 8 Z 0 0 0
                         numOpsQueued = 1;
@@ -1229,22 +1261,22 @@ void cpuTick() {
                     case 0x3F: // SRL A 2 8 Z 0 0 C
                         break;
                     case 0x40: // BIT 0 B 2 8 Z 0 1 -
-                        FLAGS |= ((cpu.regs.file.BC.B & 1) << 1) | HALFCARRY_FLAG; FLAGS &= ~SUBTR_FLAG;
+                        FLAGS = (!(cpu.regs.file.BC.B & 1) << 7) | HALFCARRY_FLAG | FLAGS & SUBTR_FLAG;
                         break;
                     case 0x41: // BIT 0 C 2 8 Z 0 1 -
-                        FLAGS |= ((cpu.regs.file.BC.C & 1) << 1) | HALFCARRY_FLAG; FLAGS &= ~SUBTR_FLAG;
+                        FLAGS = (!(cpu.regs.file.BC.C & 1) << 7) | HALFCARRY_FLAG | FLAGS & SUBTR_FLAG;
                         break;
                     case 0x42: // BIT 0 D 2 8 Z 0 1 -
-                        FLAGS |= ((cpu.regs.file.DE.D & 1) << 1) | HALFCARRY_FLAG; FLAGS &= ~SUBTR_FLAG;
+                        FLAGS = (!(cpu.regs.file.DE.D & 1) << 7) | HALFCARRY_FLAG | FLAGS & SUBTR_FLAG;
                         break;
                     case 0x43: // BIT 0 E 2 8 Z 0 1 -
-                        FLAGS |= ((cpu.regs.file.DE.E & 1) << 1) | HALFCARRY_FLAG; FLAGS &= ~SUBTR_FLAG;
+                        FLAGS = (!(cpu.regs.file.DE.E & 1) << 7) | HALFCARRY_FLAG | FLAGS & SUBTR_FLAG;
                         break;
                     case 0x44: // BIT 0 H 2 8 Z 0 1 -
-                        FLAGS |= ((cpu.regs.file.HL.H & 1) << 1) | HALFCARRY_FLAG; FLAGS &= ~SUBTR_FLAG;
+                        FLAGS = (!(cpu.regs.file.HL.H & 1) << 7) | HALFCARRY_FLAG | FLAGS & SUBTR_FLAG;
                         break;
                     case 0x45: // BIT 0 L 2 8 Z 0 1 -
-                        FLAGS |= ((cpu.regs.file.HL.L & 1) << 1) | HALFCARRY_FLAG; FLAGS &= ~SUBTR_FLAG;
+                        FLAGS = (!(cpu.regs.file.HL.L & 1) << 7) | HALFCARRY_FLAG | FLAGS & SUBTR_FLAG;
                         break;
                     case 0x46: // BIT 0 [HL] 2 12 Z 0 1 -
                         numOpsQueued = 1;
@@ -1252,25 +1284,25 @@ void cpuTick() {
                         pQ[0] = 0; pQ[1] = MMAPARR[cpu.regs.file.HL.HL];
                         break;
                     case 0x47: // BIT 0 A 2 8 Z 0 1 -
-                        FLAGS |= ((cpu.regs.file.AF.A & 1) << 1) | HALFCARRY_FLAG; FLAGS &= ~SUBTR_FLAG;
+                        FLAGS = (!(cpu.regs.file.AF.A & 1) << 7) | HALFCARRY_FLAG | FLAGS & SUBTR_FLAG;
                         break;
                     case 0x48: // BIT 1 B 2 8 Z 0 1 -
-                        FLAGS |= ((cpu.regs.file.BC.B & 2) << 1) | HALFCARRY_FLAG; FLAGS &= ~SUBTR_FLAG;
+                        FLAGS = (!(cpu.regs.file.BC.B & 2) << 7) | HALFCARRY_FLAG | FLAGS & SUBTR_FLAG;
                         break;
                     case 0x49: // BIT 1 C 2 8 Z 0 1 -
-                        FLAGS |= ((cpu.regs.file.BC.C & 2) << 1) | HALFCARRY_FLAG; FLAGS &= ~SUBTR_FLAG;
+                        FLAGS = (!(cpu.regs.file.BC.C & 2) << 7) | HALFCARRY_FLAG | FLAGS & SUBTR_FLAG;
                         break;
                     case 0x4A: // BIT 1 D 2 8 Z 0 1 -
-                        FLAGS |= ((cpu.regs.file.DE.D & 2) << 1) | HALFCARRY_FLAG; FLAGS &= ~SUBTR_FLAG;
+                        FLAGS = (!(cpu.regs.file.DE.D & 2) << 7) | HALFCARRY_FLAG | FLAGS & SUBTR_FLAG;
                         break;
                     case 0x4B: // BIT 1 E 2 8 Z 0 1 -
-                        FLAGS |= ((cpu.regs.file.DE.E & 2) << 1) | HALFCARRY_FLAG; FLAGS &= ~SUBTR_FLAG;
+                        FLAGS = (!(cpu.regs.file.DE.E & 2) << 7) | HALFCARRY_FLAG | FLAGS & SUBTR_FLAG;
                         break;
                     case 0x4C: // BIT 1 H 2 8 Z 0 1 -
-                        FLAGS |= ((cpu.regs.file.HL.H & 2) << 1) | HALFCARRY_FLAG; FLAGS &= ~SUBTR_FLAG;
+                        FLAGS = (!(cpu.regs.file.HL.H & 2) << 7) | HALFCARRY_FLAG | FLAGS & SUBTR_FLAG;
                         break;
                     case 0x4D: // BIT 1 L 2 8 Z 0 1 -
-                        FLAGS |= ((cpu.regs.file.HL.L & 2) << 1) | HALFCARRY_FLAG; FLAGS &= ~SUBTR_FLAG;
+                        FLAGS = (!(cpu.regs.file.HL.L & 2) << 7) | HALFCARRY_FLAG | FLAGS & SUBTR_FLAG;
                         break;
                     case 0x4E: // BIT 1 [HL] 2 12 Z 0 1 -
                         numOpsQueued = 1;
@@ -1278,25 +1310,25 @@ void cpuTick() {
                         pQ[0] = 1; pQ[1] = MMAPARR[cpu.regs.file.HL.HL];
                         break;
                     case 0x4F: // BIT 1 A 2 8 Z 0 1 -
-                        FLAGS |= ((cpu.regs.file.AF.A & 2) << 1) | HALFCARRY_FLAG; FLAGS &= ~SUBTR_FLAG;
+                        FLAGS = (!(cpu.regs.file.AF.A & 2) << 7) | HALFCARRY_FLAG | FLAGS & SUBTR_FLAG;
                         break;
                     case 0x50: // BIT 2 B 2 8 Z 0 1 -
-                        FLAGS |= ((cpu.regs.file.BC.B & 4) << 1) | HALFCARRY_FLAG; FLAGS &= ~SUBTR_FLAG;
+                        FLAGS = (!(cpu.regs.file.BC.B & 4) << 7) | HALFCARRY_FLAG | FLAGS & SUBTR_FLAG;
                         break;
                     case 0x51: // BIT 2 C 2 8 Z 0 1 -
-                        FLAGS |= ((cpu.regs.file.BC.C & 4) << 1) | HALFCARRY_FLAG; FLAGS &= ~SUBTR_FLAG;
+                        FLAGS = (!(cpu.regs.file.BC.C & 4) << 7) | HALFCARRY_FLAG | FLAGS & SUBTR_FLAG;
                         break;
                     case 0x52: // BIT 2 D 2 8 Z 0 1 -
-                        FLAGS |= ((cpu.regs.file.DE.D & 4) << 1) | HALFCARRY_FLAG; FLAGS &= ~SUBTR_FLAG;
+                        FLAGS = (!(cpu.regs.file.DE.D & 4) << 7) | HALFCARRY_FLAG | FLAGS & SUBTR_FLAG;
                         break;
                     case 0x53: // BIT 2 E 2 8 Z 0 1 -
-                        FLAGS |= ((cpu.regs.file.DE.E & 4) << 1) | HALFCARRY_FLAG; FLAGS &= ~SUBTR_FLAG;
+                        FLAGS = (!(cpu.regs.file.DE.E & 4) << 7) | HALFCARRY_FLAG | FLAGS & SUBTR_FLAG;
                         break;
                     case 0x54: // BIT 2 H 2 8 Z 0 1 -
-                        FLAGS |= ((cpu.regs.file.HL.H & 4) << 1) | HALFCARRY_FLAG; FLAGS &= ~SUBTR_FLAG;
+                        FLAGS = (!(cpu.regs.file.HL.H & 4) << 7) | HALFCARRY_FLAG | FLAGS & SUBTR_FLAG;
                         break;
                     case 0x55: // BIT 2 L 2 8 Z 0 1 -
-                        FLAGS |= ((cpu.regs.file.HL.L & 4) << 1) | HALFCARRY_FLAG; FLAGS &= ~SUBTR_FLAG;
+                        FLAGS = (!(cpu.regs.file.HL.L & 4) << 7) | HALFCARRY_FLAG | FLAGS & SUBTR_FLAG;
                         break;
                     case 0x56: // BIT 2 [HL] 2 12 Z 0 1 -
                         numOpsQueued = 1;
@@ -1304,25 +1336,25 @@ void cpuTick() {
                         pQ[0] = 2; pQ[1] = MMAPARR[cpu.regs.file.HL.HL];
                         break;
                     case 0x57: // BIT 2 A 2 8 Z 0 1 -
-                        FLAGS |= ((cpu.regs.file.AF.A & 4) << 1) | HALFCARRY_FLAG; FLAGS &= ~SUBTR_FLAG;
+                        FLAGS = (!(cpu.regs.file.AF.A & 4) << 7) | HALFCARRY_FLAG | FLAGS & SUBTR_FLAG;
                         break;
                     case 0x58: // BIT 3 B 2 8 Z 0 1 -
-                        FLAGS |= ((cpu.regs.file.BC.B & 8) << 1) | HALFCARRY_FLAG; FLAGS &= ~SUBTR_FLAG;
+                        FLAGS = (!(cpu.regs.file.BC.B & 8) << 7) | HALFCARRY_FLAG | FLAGS & SUBTR_FLAG;
                         break;
                     case 0x59: // BIT 3 C 2 8 Z 0 1 -
-                        FLAGS |= ((cpu.regs.file.BC.C & 8) << 1) | HALFCARRY_FLAG; FLAGS &= ~SUBTR_FLAG;
+                        FLAGS = (!(cpu.regs.file.BC.C & 8) << 7) | HALFCARRY_FLAG | FLAGS & SUBTR_FLAG;
                         break;
                     case 0x5A: // BIT 3 D 2 8 Z 0 1 -
-                        FLAGS |= ((cpu.regs.file.DE.D & 8) << 1) | HALFCARRY_FLAG; FLAGS &= ~SUBTR_FLAG;
+                        FLAGS = (!(cpu.regs.file.DE.D & 8) << 7) | HALFCARRY_FLAG | FLAGS & SUBTR_FLAG;
                         break;
                     case 0x5B: // BIT 3 E 2 8 Z 0 1 -
-                        FLAGS |= ((cpu.regs.file.DE.E & 8) << 1) | HALFCARRY_FLAG; FLAGS &= ~SUBTR_FLAG;
+                        FLAGS = (!(cpu.regs.file.DE.E & 8) << 7) | HALFCARRY_FLAG | FLAGS & SUBTR_FLAG;
                         break;
                     case 0x5C: // BIT 3 H 2 8 Z 0 1 -
-                        FLAGS |= ((cpu.regs.file.HL.H & 8) << 1) | HALFCARRY_FLAG; FLAGS &= ~SUBTR_FLAG;
+                        FLAGS = (!(cpu.regs.file.HL.H & 8) << 7) | HALFCARRY_FLAG | FLAGS & SUBTR_FLAG;
                         break;
                     case 0x5D: // BIT 3 L 2 8 Z 0 1 -
-                        FLAGS |= ((cpu.regs.file.HL.L & 8) << 1) | HALFCARRY_FLAG; FLAGS &= ~SUBTR_FLAG;
+                        FLAGS = (!(cpu.regs.file.HL.L & 8) << 7) | HALFCARRY_FLAG | FLAGS & SUBTR_FLAG;
                         break;
                     case 0x5E: // BIT 3 [HL] 2 12 Z 0 1 -
                         numOpsQueued = 1;
@@ -1330,25 +1362,25 @@ void cpuTick() {
                         pQ[0] = 3; pQ[1] = MMAPARR[cpu.regs.file.HL.HL];
                         break;
                     case 0x5F: // BIT 3 A 2 8 Z 0 1 -
-                        FLAGS |= ((cpu.regs.file.AF.A & 8) << 1) | HALFCARRY_FLAG; FLAGS &= ~SUBTR_FLAG;
+                        FLAGS = (!(cpu.regs.file.AF.A & 8) << 7) | HALFCARRY_FLAG | FLAGS & SUBTR_FLAG;
                         break;
                     case 0x60: // BIT 4 B 2 8 Z 0 1 -
-                        FLAGS |= ((cpu.regs.file.BC.B & 16) << 1) | HALFCARRY_FLAG; FLAGS &= ~SUBTR_FLAG;
+                        FLAGS = (!(cpu.regs.file.BC.B & 16) << 7) | HALFCARRY_FLAG | FLAGS & SUBTR_FLAG;
                         break;
                     case 0x61: // BIT 4 C 2 8 Z 0 1 -
-                        FLAGS |= ((cpu.regs.file.BC.C & 16) << 1) | HALFCARRY_FLAG; FLAGS &= ~SUBTR_FLAG;
+                        FLAGS = (!(cpu.regs.file.BC.C & 16) << 7) | HALFCARRY_FLAG | FLAGS & SUBTR_FLAG;
                         break;
                     case 0x62: // BIT 4 D 2 8 Z 0 1 -
-                        FLAGS |= ((cpu.regs.file.DE.D & 16) << 1) | HALFCARRY_FLAG; FLAGS &= ~SUBTR_FLAG;
+                        FLAGS = (!(cpu.regs.file.DE.D & 16) << 7) | HALFCARRY_FLAG | FLAGS & SUBTR_FLAG;
                         break;
                     case 0x63: // BIT 4 E 2 8 Z 0 1 -
-                        FLAGS |= ((cpu.regs.file.DE.E & 16) << 1) | HALFCARRY_FLAG; FLAGS &= ~SUBTR_FLAG;
+                        FLAGS = (!(cpu.regs.file.DE.E & 16) << 7) | HALFCARRY_FLAG | FLAGS & SUBTR_FLAG;
                         break;
                     case 0x64: // BIT 4 H 2 8 Z 0 1 -
-                        FLAGS |= ((cpu.regs.file.HL.H & 16) << 1) | HALFCARRY_FLAG; FLAGS &= ~SUBTR_FLAG;
+                        FLAGS = (!(cpu.regs.file.HL.H & 16) << 7) | HALFCARRY_FLAG | FLAGS & SUBTR_FLAG;
                         break;
                     case 0x65: // BIT 4 L 2 8 Z 0 1 -
-                        FLAGS |= ((cpu.regs.file.HL.L & 16) << 1) | HALFCARRY_FLAG; FLAGS &= ~SUBTR_FLAG;
+                        FLAGS = (!(cpu.regs.file.HL.L & 16) << 7) | HALFCARRY_FLAG | FLAGS & SUBTR_FLAG;
                         break;
                     case 0x66: // BIT 4 [HL] 2 12 Z 0 1 -
                         numOpsQueued = 1;
@@ -1356,25 +1388,25 @@ void cpuTick() {
                         pQ[0] = 4; pQ[1] = MMAPARR[cpu.regs.file.HL.HL];
                         break;
                     case 0x67: // BIT 4 A 2 8 Z 0 1 -
-                        FLAGS |= ((cpu.regs.file.AF.A & 16) << 1) | HALFCARRY_FLAG; FLAGS &= ~SUBTR_FLAG;
+                        FLAGS = (!(cpu.regs.file.AF.A & 16) << 7) | HALFCARRY_FLAG | FLAGS & SUBTR_FLAG;
                         break;
                     case 0x68: // BIT 5 B 2 8 Z 0 1 -
-                        FLAGS |= ((cpu.regs.file.BC.B & 32) << 1) | HALFCARRY_FLAG; FLAGS &= ~SUBTR_FLAG;
+                        FLAGS = (!(cpu.regs.file.BC.B & 32) << 7) | HALFCARRY_FLAG | FLAGS & SUBTR_FLAG;
                         break;
                     case 0x69: // BIT 5 C 2 8 Z 0 1 -
-                        FLAGS |= ((cpu.regs.file.BC.C & 32) << 1) | HALFCARRY_FLAG; FLAGS &= ~SUBTR_FLAG;
+                        FLAGS = (!(cpu.regs.file.BC.C & 32) << 7) | HALFCARRY_FLAG | FLAGS & SUBTR_FLAG;
                         break;
                     case 0x6A: // BIT 5 D 2 8 Z 0 1 -
-                        FLAGS |= ((cpu.regs.file.DE.D & 32) << 1) | HALFCARRY_FLAG; FLAGS &= ~SUBTR_FLAG;
+                        FLAGS = (!(cpu.regs.file.DE.D & 32) << 7) | HALFCARRY_FLAG | FLAGS & SUBTR_FLAG;
                         break;
                     case 0x6B: // BIT 5 E 2 8 Z 0 1 -
-                        FLAGS |= ((cpu.regs.file.DE.E & 32) << 1) | HALFCARRY_FLAG; FLAGS &= ~SUBTR_FLAG;
+                        FLAGS = (!(cpu.regs.file.DE.E & 32) << 7) | HALFCARRY_FLAG | FLAGS & SUBTR_FLAG;
                         break;
                     case 0x6C: // BIT 5 H 2 8 Z 0 1 -
-                        FLAGS |= ((cpu.regs.file.HL.H & 32) << 1) | HALFCARRY_FLAG; FLAGS &= ~SUBTR_FLAG;
+                        FLAGS = (!(cpu.regs.file.HL.H & 32) << 7) | HALFCARRY_FLAG | FLAGS & SUBTR_FLAG;
                         break;
                     case 0x6D: // BIT 5 L 2 8 Z 0 1 -
-                        FLAGS |= ((cpu.regs.file.HL.L & 32) << 1) | HALFCARRY_FLAG; FLAGS &= ~SUBTR_FLAG;
+                        FLAGS = (!(cpu.regs.file.HL.L & 32) << 7) | HALFCARRY_FLAG | FLAGS & SUBTR_FLAG;
                         break;
                     case 0x6E: // BIT 5 [HL] 2 12 Z 0 1 -
                         numOpsQueued = 1;
@@ -1382,25 +1414,25 @@ void cpuTick() {
                         pQ[0] = 5; pQ[1] = MMAPARR[cpu.regs.file.HL.HL];
                         break;
                     case 0x6F: // BIT 5 A 2 8 Z 0 1 -
-                        FLAGS |= ((cpu.regs.file.AF.A & 32) << 1) | HALFCARRY_FLAG; FLAGS &= ~SUBTR_FLAG;
+                        FLAGS = (!(cpu.regs.file.AF.A & 32) << 7) | HALFCARRY_FLAG | FLAGS & SUBTR_FLAG;
                         break;
                     case 0x70: // BIT 6 B 2 8 Z 0 1 -
-                        FLAGS |= ((cpu.regs.file.BC.B & 64) << 1) | HALFCARRY_FLAG; FLAGS &= ~SUBTR_FLAG;
+                        FLAGS = (!(cpu.regs.file.BC.B & 64) << 7) | HALFCARRY_FLAG | FLAGS & SUBTR_FLAG;
                         break;
                     case 0x71: // BIT 6 C 2 8 Z 0 1 -
-                        FLAGS |= ((cpu.regs.file.BC.C & 64) << 1) | HALFCARRY_FLAG; FLAGS &= ~SUBTR_FLAG;
+                        FLAGS = (!(cpu.regs.file.BC.C & 64) << 7) | HALFCARRY_FLAG | FLAGS & SUBTR_FLAG;
                         break;
                     case 0x72: // BIT 6 D 2 8 Z 0 1 -
-                        FLAGS |= ((cpu.regs.file.DE.D & 64) << 1) | HALFCARRY_FLAG; FLAGS &= ~SUBTR_FLAG;
+                        FLAGS = (!(cpu.regs.file.DE.D & 64) << 7) | HALFCARRY_FLAG | FLAGS & SUBTR_FLAG;
                         break;
                     case 0x73: // BIT 6 E 2 8 Z 0 1 -
-                        FLAGS |= ((cpu.regs.file.DE.E & 64) << 1) | HALFCARRY_FLAG; FLAGS &= ~SUBTR_FLAG;
+                        FLAGS = (!(cpu.regs.file.DE.E & 64) << 7) | HALFCARRY_FLAG | FLAGS & SUBTR_FLAG;
                         break;
                     case 0x74: // BIT 6 H 2 8 Z 0 1 -
-                        FLAGS |= ((cpu.regs.file.HL.H & 64) << 1) | HALFCARRY_FLAG; FLAGS &= ~SUBTR_FLAG;
+                        FLAGS = (!(cpu.regs.file.HL.H & 64) << 7) | HALFCARRY_FLAG | FLAGS & SUBTR_FLAG;
                         break;
                     case 0x75: // BIT 6 L 2 8 Z 0 1 -
-                        FLAGS |= ((cpu.regs.file.HL.L & 64) << 1) | HALFCARRY_FLAG; FLAGS &= ~SUBTR_FLAG;
+                        FLAGS = (!(cpu.regs.file.HL.L & 64) << 7) | HALFCARRY_FLAG | FLAGS & SUBTR_FLAG;
                         break;
                     case 0x76: // BIT 6 [HL] 2 12 Z 0 1 -
                         numOpsQueued = 1;
@@ -1408,25 +1440,25 @@ void cpuTick() {
                         pQ[0] = 6; pQ[1] = MMAPARR[cpu.regs.file.HL.HL];
                         break;
                     case 0x77: // BIT 6 A 2 8 Z 0 1 -
-                        FLAGS |= ((cpu.regs.file.AF.A & 64) << 1) | HALFCARRY_FLAG; FLAGS &= ~SUBTR_FLAG;
+                        FLAGS = (!(cpu.regs.file.AF.A & 64) << 7) | HALFCARRY_FLAG | (FLAGS & SUBTR_FLAG);
                         break;
                     case 0x78: // BIT 7 B 2 8 Z 0 1 -
-                        FLAGS |= (cpu.regs.file.BC.B & 128) | HALFCARRY_FLAG; FLAGS &= ~SUBTR_FLAG;
+                        FLAGS = !(cpu.regs.file.BC.B & 0b10000000u) << 7 | HALFCARRY_FLAG | (FLAGS & SUBTR_FLAG);
                         break;
                     case 0x79: // BIT 7 C 2 8 Z 0 1 -
-                        FLAGS |= (cpu.regs.file.BC.C & 128) | HALFCARRY_FLAG; FLAGS &= ~SUBTR_FLAG;
+                        FLAGS = !(cpu.regs.file.BC.C & 0b10000000u) << 7 | HALFCARRY_FLAG | (FLAGS & SUBTR_FLAG);
                         break;
                     case 0x7A: // BIT 7 D 2 8 Z 0 1 -
-                        FLAGS |= (cpu.regs.file.DE.D & 128) | HALFCARRY_FLAG; FLAGS &= ~SUBTR_FLAG;
+                        FLAGS = !(cpu.regs.file.DE.D & 0b10000000u) << 7 | HALFCARRY_FLAG | (FLAGS & SUBTR_FLAG);
                         break;
                     case 0x7B: // BIT 7 E 2 8 Z 0 1 -
-                        FLAGS |= (cpu.regs.file.DE.E & 128) | HALFCARRY_FLAG; FLAGS &= ~SUBTR_FLAG;
+                        FLAGS = !(cpu.regs.file.DE.E & 0b10000000u) << 7 | HALFCARRY_FLAG | (FLAGS & SUBTR_FLAG);
                         break;
                     case 0x7C: // BIT 7 H 2 8 Z 0 1 -
-                        FLAGS |= (cpu.regs.file.HL.H & 128) | HALFCARRY_FLAG; FLAGS &= ~SUBTR_FLAG;
+                        FLAGS = !(cpu.regs.file.HL.H & 0b10000000u) << 7 | HALFCARRY_FLAG | (FLAGS & SUBTR_FLAG);
                         break;
                     case 0x7D: // BIT 7 L 2 8 Z 0 1 -
-                        FLAGS |= (cpu.regs.file.HL.L & 128) | HALFCARRY_FLAG; FLAGS &= ~SUBTR_FLAG;
+                        FLAGS = !(cpu.regs.file.HL.L & 0b10000000u) << 7 | HALFCARRY_FLAG | (FLAGS & SUBTR_FLAG);
                         break;
                     case 0x7E: // BIT 7 [HL] 2 12 Z 0 1 -
                         numOpsQueued = 1;
@@ -1434,7 +1466,7 @@ void cpuTick() {
                         pQ[0] = 7; pQ[1] = MMAPARR[cpu.regs.file.HL.HL];
                         break;
                     case 0x7F: // BIT 7 A 2 8 Z 0 1 -
-                        FLAGS |= (cpu.regs.file.AF.A & 128) | HALFCARRY_FLAG; FLAGS &= ~SUBTR_FLAG;
+                        FLAGS |= (cpu.regs.file.AF.A & 0b10000000u) << 7 | HALFCARRY_FLAG; FLAGS &= ~SUBTR_FLAG;
                         break;
                     case 0x80: // RES 0 B 2 8 - - - -
                         break;
@@ -1715,7 +1747,11 @@ void cpuTick() {
             break;
         case executeInstruction:
             opQ[--numOpsQueued]();
-            if (numOpsQueued == 0) cpu.state = fetchOpcode;
+            if (numOpsQueued == 0) {
+                cpu.state = fetchOpcode;
+                miscOp();
+                miscOp = doNothing;
+            }
             break;
     }
     if (numOpsQueued > 0) cpu.state = executeInstruction;

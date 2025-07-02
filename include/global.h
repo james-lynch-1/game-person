@@ -13,16 +13,20 @@ extern u32 maxFPS;
 extern int scale;
 extern int WINDOW_WIDTH;
 extern int WINDOW_HEIGHT;
+extern int frameBufferIter;
 
 extern CPU cpu;
 extern PPU ppu;
 extern MMap mMap;
+
+extern Fetcher fetcher;
 
 // renderer stuff
 extern int* gFrameBuffer;
 extern SDL_Window* gSDLWindow;
 extern SDL_Renderer* gSDLRenderer;
 extern SDL_Texture* gSDLTexture;
+extern int colourArr[4];
 static int gDone;
 
 #endif

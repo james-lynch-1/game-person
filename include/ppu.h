@@ -3,4 +3,6 @@
 
 #include "global.h"
 
+void ppuTick();
+
 #endif
