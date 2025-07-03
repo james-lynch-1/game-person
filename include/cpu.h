@@ -7,6 +7,10 @@
 #include "ram.h"
 #include "type.h"
 
+void decrementReg16();
+
+void writeByteToMemAndDec16();
+
 void cpuTick();
 
 #endif
