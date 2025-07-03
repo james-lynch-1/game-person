@@ -1,5 +1,6 @@
 #include "main.h"
-u32 startTime = 0, frameTime = 0;
+u64 startTime = 0;
+u64 frameTime = 0;
 bool update() {
     SDL_Event e;
     if (SDL_PollEvent(&e)) {
@@ -31,10 +32,7 @@ void loop() {
         gDone = 1;
     }
     frameTime = SDL_GetTicksNS() - startTime;
-    SDL_DelayNS(16666666 - frameTime);
-    // else {
-    //     render(SDL_GetTicks());
-    // }
+    if (frameTime < 16666666) SDL_DelayNS(16666666 - frameTime);
 }
 
 int main(int argc, char* argv[]) {
@@ -75,11 +73,9 @@ int main(int argc, char* argv[]) {
     gFrameBuffer = malloc(160 * 144 * sizeof(int));
     gSDLWindow = SDL_CreateWindow(title, WINDOW_WIDTH, WINDOW_HEIGHT, 0);
     gSDLRenderer = SDL_CreateRenderer(gSDLWindow, NULL);
+    // SDL_SetRenderVSync(gSDLRenderer, 1);
     SDL_SetDefaultTextureScaleMode(gSDLRenderer, SDL_SCALEMODE_NEAREST);
-    // SDL_SetRenderLogicalPresentation(gSDLRenderer, WINDOW_WIDTH, WINDOW_HEIGHT, SDL_LOGICAL_PRESENTATION_INTEGER_SCALE);
     gSDLTexture = SDL_CreateTexture(gSDLRenderer, SDL_PIXELFORMAT_ABGR8888, SDL_TEXTUREACCESS_STREAMING, 160, 144);
-
-    // SDL_SetTextureScaleMode(gSDLTexture, SDL_SCALEMODE_NEAREST);
 
     if (!gFrameBuffer || !gSDLWindow || !gSDLRenderer || !gSDLTexture)
         return -1;
