@@ -5,7 +5,6 @@ u32 maxFPS;
 int scale;
 int WINDOW_WIDTH;
 int WINDOW_HEIGHT;
-int frameBufferIter;
 
 Cpu cpu;
 Ppu ppu;

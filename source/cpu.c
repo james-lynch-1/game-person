@@ -7,7 +7,6 @@ void(*opQ[6])(); int numOpsQueued; // counts down. Always pre-decrement when usi
 int pQ[32]; int pIndex; // these act as parameters for the micro-ops. Counts up. Always post-inc.
 void(*miscOp)(); // miscellaneous operation to be done at the end of the opqueue but doesn't incur cycles
 
-extern int iter;
 // atomic ops:
 /*
 General:

@@ -78,7 +78,6 @@ void ppuTick() {
             if (size <= 8) break;
             colour = dequeue(&(fetcher.bgFIFO)).colour;
             gFrameBuffer[LCDPROPS.LY * 160 + ppu.x] = colourArr[colour];
-            frameBufferIter++;
             ppu.x++;
             if (ppu.x == 160)
                 ppu.state = mode0;

@@ -1,5 +1,5 @@
 #include "main.h"
-int iter = 0;
+u32 startTime = 0, frameTime = 0;
 bool update() {
     SDL_Event e;
     if (SDL_PollEvent(&e)) {
@@ -18,32 +18,20 @@ bool update() {
     SDL_UnlockTexture(gSDLTexture);
     SDL_RenderTexture(gSDLRenderer, gSDLTexture, NULL, NULL);
     SDL_RenderPresent(gSDLRenderer);
-    SDL_Delay(13);
     return true;
 }
 
-void putpixel(int x, int y, int colour) {
-    gFrameBuffer[y * WINDOW_WIDTH + x] = colour;
-}
-
-void render(Uint64 aTicks) {
-    for (int i = 0, c = 0; i < 144; i++) {
-        for (int j = 0; j < 160; j++, c++) {
-            gFrameBuffer[c] = (int)(i * j + j) | 0xff000000;
-        }
-    }
-}
-
 void loop() {
+    startTime = SDL_GetTicksNS();
     for (int i = 0; i < 70224; i++) {
         cpuTick();
         ppuTick();
     }
-    frameBufferIter = 0;
     if (!update()) {
         gDone = 1;
     }
-    iter++;
+    frameTime = SDL_GetTicksNS() - startTime;
+    SDL_DelayNS(16666666 - frameTime);
     // else {
     //     render(SDL_GetTicks());
     // }
@@ -120,7 +108,6 @@ void initialiseValues() {
     scale = 4;
     WINDOW_WIDTH = 160 * scale;
     WINDOW_HEIGHT = 144 * scale;
-    frameBufferIter = 0;
     colourArr[0] = 0xffffffff;
     colourArr[1] = 0xffaaaaaa;
     colourArr[2] = 0xff555555;

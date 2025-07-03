@@ -13,7 +13,6 @@ extern u32 maxFPS;
 extern int scale;
 extern int WINDOW_WIDTH;
 extern int WINDOW_HEIGHT;
-extern int frameBufferIter;
 
 extern Cpu cpu;
 extern Ppu ppu;
