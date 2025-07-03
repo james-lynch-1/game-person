@@ -227,8 +227,6 @@ void cpuTick() {
             pIndex = 0;
             numOpsQueued = 0;
             opcode = MMAP.rom.bank0_1[cpu.regs.file.PC++];
-            if (cpu.regs.file.PC == 0x35)
-                printf("here\n");
             if (!cpu.prefixedInstr)
                 switch (opcode) {
                     case 0x00: // NOP 1 4 - - - -
@@ -316,7 +314,7 @@ void cpuTick() {
                     case 0x18: // JR e8 2 12 - - - -
                         numOpsQueued = 2;
                         opQ[1] = readByteToReg; pQ[0] = REGW_IDX; pQ[1] = ROMVAL;
-                        opQ[0] = jump; pQ[2] = cpu.regs.file.PC + REGARR8[REGW_IDX];
+                        opQ[0] = jump; pQ[2] = cpu.regs.file.PC + (s8)pQ[1];
                         break;
                     case 0x19: // ADD HL DE 1 8 - 0 H C
                         numOpsQueued = 1;
@@ -344,7 +342,7 @@ void cpuTick() {
                         break;
                     case 0x20: // JR NZ e8 2 12/8 - - - -
                         numOpsQueued = 1;
-                        opQ[0] = cmpJR; pQ[0] = (FLAGS & ZERO_FLAG) == 0; pQ[1] = ROMVAL;
+                        opQ[0] = cmpJR; pQ[0] = (FLAGS & ZERO_FLAG) == 0; pQ[1] = (s8)ROMVAL;
                         break;
                     case 0x21: // LD HL n16 3 12 - - - -
                         numOpsQueued = 2;
@@ -376,7 +374,7 @@ void cpuTick() {
                         break;
                     case 0x28: // JR Z e8 2 12/8 - - - -
                         numOpsQueued = 1;
-                        opQ[0] = cmpJR; pQ[0] = (FLAGS & ZERO_FLAG) != 0; pQ[1] = ROMVAL;
+                        opQ[0] = cmpJR; pQ[0] = (FLAGS & ZERO_FLAG) != 0; pQ[1] = (s8)ROMVAL;
                         break;
                     case 0x29: // ADD HL HL 1 8 - 0 H C
                         numOpsQueued = 1;

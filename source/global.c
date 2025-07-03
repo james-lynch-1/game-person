@@ -7,8 +7,8 @@ int WINDOW_WIDTH;
 int WINDOW_HEIGHT;
 int frameBufferIter;
 
-CPU cpu;
-PPU ppu;
+Cpu cpu;
+Ppu ppu;
 MMap mMap;
 
 Fetcher fetcher;

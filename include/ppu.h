@@ -1,5 +1,5 @@
-#ifndef PPUH
-#define PPUH
+#ifndef PPU
+#define PPU
 
 #include "global.h"
 

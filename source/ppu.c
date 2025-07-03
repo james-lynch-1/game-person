@@ -6,7 +6,7 @@ void startFetcher(Fetcher* fetcher) {
     fetcher->mapAddr = ((LCDPROPS.LCDC & BG_TILEMAP_AREA_MASK) && (ppu.x < LCDPROPS.WX - 7) && (LCDPROPS.LY < LCDPROPS.WY)) ||
         isWindow ? 0x9C00 : 0x9800;
     fetcher->y = isWindow ? LCDPROPS.LY - LCDPROPS.WY : (LCDPROPS.LY + LCDPROPS.SCY) % 256;
-    fetcher->tileIndex = 0; // index into the map
+    fetcher->tileIndex = fetcher->y / 8 * 32; // index into the map
     fetcher->state = getTile;
     fetcher->ticks = 0;
     initialiseFIFO(&fetcher->bgFIFO);
@@ -18,6 +18,7 @@ void fetcherTick(Fetcher* fetcher) {
     bool isWindow = ((LCDPROPS.LCDC & WINDOW_ENABLE_MASK) && (ppu.x > LCDPROPS.WX - 7) && (LCDPROPS.LY > LCDPROPS.WY));
     int blockOffset = LCDPROPS.LCDC & BG_WDW_TILE_DATA_AREA_MASK ? 0x8000 : 0x8800;
     Tile* t;
+    // u16 tileRow;
     Pixel p;
     int bit0, bit1;
     fetcher->ticks = 0;
@@ -29,22 +30,21 @@ void fetcherTick(Fetcher* fetcher) {
             fetcher->state = getTileDataLow;
             break;
         case getTileDataLow:
-            t = (Tile*)&MMAPARR[blockOffset + fetcher->tileID];
-            if (t->row[0] != 0)
-                printf("whoa!\n");
+            // tileRow = MMAPARR[blockOffset + fetcher->tileID * 16 + ]
+            t = (Tile*)&MMAPARR[blockOffset + fetcher->tileID * 16];
             for (int i = 0; i < 4; i++) {
                 bit0 = (t->row[fetcher->y % 8] >> (8 + i)) & 1; // lsb
                 bit1 = (t->row[fetcher->y % 8] >> i) & 1; // msb
-                fetcher->tileData[i].colour = bit0 & (bit1 << 1);
+                fetcher->tileData[i].colour = bit0 | (bit1 << 1);
             }
             fetcher->state = getTileDataHigh;
             break;
         case getTileDataHigh:
-            t = (Tile*)&MMAPARR[blockOffset + fetcher->tileID];
+            t = (Tile*)&MMAPARR[blockOffset + fetcher->tileID * 16];
             for (int i = 4; i < 8; i++) {
                 bit0 = (t->row[fetcher->y % 8] >> (8 + i)) & 1; // lsb
                 bit1 = (t->row[fetcher->y % 8] >> i) & 1; // msb
-                fetcher->tileData[i].colour = bit0 & (bit1 << 1);
+                fetcher->tileData[i].colour = bit0 | (bit1 << 1);
             }
             fetcher->state = push;
             break;
@@ -52,7 +52,7 @@ void fetcherTick(Fetcher* fetcher) {
             break;
         case push:
             if (getSizeFIFO(&fetcher->bgFIFO) <= 8) {
-                for (int i = 0; i < 8; i++)
+                for (int i = 7; i >= 0; i--)
                     enqueue(&fetcher->bgFIFO, fetcher->tileData[i]);
                 fetcher->state = getTile;
             }
@@ -77,13 +77,9 @@ void ppuTick() {
             size = getSizeFIFO(&(fetcher.bgFIFO));
             if (size <= 8) break;
             colour = dequeue(&(fetcher.bgFIFO)).colour;
-            if (colour != 0)
-                printf("%i\n", colour);
             gFrameBuffer[LCDPROPS.LY * 160 + ppu.x] = colourArr[colour];
             frameBufferIter++;
             ppu.x++;
-            // if (frameBufferIter >= 23040)
-            //     printf("greater than buffer");
             if (ppu.x == 160)
                 ppu.state = mode0;
             break;

@@ -24,7 +24,7 @@
 enum CpuState {
     fetchOpcode, executeInstruction
 };
-enum PPUState {
+enum PpuState {
     mode2, mode3, mode0, mode1 // OAM scan, drawing pixels, hBlank, vBlank
 };
 enum FetcherState {
@@ -69,12 +69,12 @@ typedef union Registers_ {
     u8 arr8[14];
 } Registers;
 
-typedef struct CPU_ {
+typedef struct Cpu_ {
     Registers regs;
     int ticks;
     enum CpuState state;
     bool prefixedInstr;
-} CPU;
+} Cpu;
 
 // register indices in regs.arr8
 #define REGF_IDX    0
@@ -103,11 +103,11 @@ typedef struct CPU_ {
 
 /* PPU */
 
-typedef struct PPU_ {
-    enum PPUState state;
+typedef struct Ppu_ {
+    enum PpuState state;
     u32 ticks;
     u8 x;
-} PPU;
+} Ppu;
 
 typedef struct Pixel_ {
     u8 colour;

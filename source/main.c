@@ -18,7 +18,7 @@ bool update() {
     SDL_UnlockTexture(gSDLTexture);
     SDL_RenderTexture(gSDLRenderer, gSDLTexture, NULL, NULL);
     SDL_RenderPresent(gSDLRenderer);
-    SDL_Delay(1);
+    SDL_Delay(13);
     return true;
 }
 
@@ -117,7 +117,7 @@ void initialiseLCDProps() {
 
 void initialiseValues() {
     maxFPS = 60;
-    scale = 6;
+    scale = 4;
     WINDOW_WIDTH = 160 * scale;
     WINDOW_HEIGHT = 144 * scale;
     frameBufferIter = 0;

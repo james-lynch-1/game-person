@@ -1,5 +1,5 @@
-#ifndef CPUH
-#define CPUH
+#ifndef CPU
+#define CPU
 
 #include "util.h"
 #include "registers.h"

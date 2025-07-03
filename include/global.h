@@ -15,8 +15,8 @@ extern int WINDOW_WIDTH;
 extern int WINDOW_HEIGHT;
 extern int frameBufferIter;
 
-extern CPU cpu;
-extern PPU ppu;
+extern Cpu cpu;
+extern Ppu ppu;
 extern MMap mMap;
 
 extern Fetcher fetcher;
