@@ -2,12 +2,11 @@
 #define GLOBAL
 
 #include "util.h"
-#include "ram.h"
-#include "registers.h"
 #include "type.h"
 
 // globals
 // values
+extern char title[30];
 extern FILE* romPtr;
 extern u32 maxFPS;
 extern int scale;

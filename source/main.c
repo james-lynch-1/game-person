@@ -44,50 +44,16 @@ int main(int argc, char* argv[]) {
         printf("couldn't open file\n");
         exit(1);
     }
-
     initialiseValues();
     fread(MMAP.rom.bank0_1, 4, 0x2000, romPtr);
-    // while (1) {
-    //     // char pcHex[5];
-    //     // decToHex(MMAP.rom.bank0_1[pc], pcHex, 5);
-    //     // if (i % 4 == 0) printf("%s ", pcHex);
-    //     cpuTick();
-    //     // if (i % 4 == 0 && cpuState == fetchOpcode) printf("%x ", MMAP.rom.bank0_1[pc]);
-    //     // if (i % 4 == 0 && cpuState == fetchOpcode) printf("%d ", pc);
-    // }
-    // printf("\n");
-    // char regLetters[] = {'F', 'A', 'C', 'B', 'E', 'D', 'L', 'H'};
-    // for (int i = 0; i < 8; i++) {
-    //     printf("%c: %d\n", regLetters[i], regs.arr8[i]);
-    // }
+    setTitle();
 
-    // return 0;
-    if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS))
-        return -1;
-
-    char title[30] = "";
-    getTitle(title, romPtr);
-    strncat(title, " - GamePerson", strlen(title) - 1);
-
-    SDL_SetDefaultTextureScaleMode(gSDLRenderer, SDL_SCALEMODE_NEAREST);
-    gFrameBuffer = malloc(160 * 144 * sizeof(int));
-    gSDLWindow = SDL_CreateWindow(title, WINDOW_WIDTH, WINDOW_HEIGHT, 0);
-    gSDLRenderer = SDL_CreateRenderer(gSDLWindow, NULL);
-    // SDL_SetRenderVSync(gSDLRenderer, 1);
-    SDL_SetDefaultTextureScaleMode(gSDLRenderer, SDL_SCALEMODE_NEAREST);
-    gSDLTexture = SDL_CreateTexture(gSDLRenderer, SDL_PIXELFORMAT_ABGR8888, SDL_TEXTUREACCESS_STREAMING, 160, 144);
-
-    if (!gFrameBuffer || !gSDLWindow || !gSDLRenderer || !gSDLTexture)
-        return -1;
+    if (!initialiseVideo()) return -1;
 
     gDone = 0;
     while (!gDone) {
         loop();
     }
-    SDL_DestroyTexture(gSDLTexture);
-    SDL_DestroyRenderer(gSDLRenderer);
-    SDL_DestroyWindow(gSDLWindow);
-    SDL_Quit();
 
     fclose(romPtr);
     printf("\n");
@@ -124,4 +90,31 @@ void initialiseValues() {
 
     initialiseFIFO(&fetcher.bgFIFO);
     initialiseFIFO(&fetcher.objFIFO);
+}
+
+void setTitle() {
+    getTitle(title, romPtr);
+    strcat(title, " - GamePerson");
+}
+
+bool initialiseVideo() {
+    if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS))
+        return false;
+    SDL_SetDefaultTextureScaleMode(gSDLRenderer, SDL_SCALEMODE_NEAREST);
+    gFrameBuffer = malloc(160 * 144 * sizeof(int));
+    gSDLWindow = SDL_CreateWindow(title, WINDOW_WIDTH, WINDOW_HEIGHT, 0);
+    gSDLRenderer = SDL_CreateRenderer(gSDLWindow, NULL);
+    // SDL_SetRenderVSync(gSDLRenderer, 1);
+    SDL_SetDefaultTextureScaleMode(gSDLRenderer, SDL_SCALEMODE_NEAREST);
+    gSDLTexture = SDL_CreateTexture(gSDLRenderer, SDL_PIXELFORMAT_ABGR8888, SDL_TEXTUREACCESS_STREAMING, 160, 144);
+    if (!gFrameBuffer || !gSDLWindow || !gSDLRenderer || !gSDLTexture)
+        return false;
+    return true;
+}
+
+void quitSDL() {
+    SDL_DestroyTexture(gSDLTexture);
+    SDL_DestroyRenderer(gSDLRenderer);
+    SDL_DestroyWindow(gSDLWindow);
+    SDL_Quit();
 }

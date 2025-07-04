@@ -1,5 +1,6 @@
 #include "global.h"
 
+char title[30] = "";
 FILE* romPtr;
 u32 maxFPS;
 int scale;

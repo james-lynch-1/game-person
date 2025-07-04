@@ -76,6 +76,7 @@ typedef struct Cpu_ {
     int ticks;
     enum CpuState state;
     bool prefixedInstr;
+    bool ime; // interrupt master enable flag
 } Cpu;
 
 // register indices in regs.arr8
