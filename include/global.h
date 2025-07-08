@@ -16,6 +16,7 @@ extern int WINDOW_HEIGHT;
 extern Cpu cpu;
 extern Ppu ppu;
 extern MMap mMap;
+extern int cycles;
 
 extern Fetcher fetcher;
 

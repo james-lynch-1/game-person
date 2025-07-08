@@ -3,9 +3,14 @@ u64 startTime = 0;
 u64 frameTime = 0;
 bool update() {
     SDL_Event e;
-    if (SDL_PollEvent(&e)) {
-        if (e.type == SDL_EVENT_QUIT) {
-            return false;
+    while (SDL_PollEvent(&e)) {
+        switch (e.type) {
+            case SDL_EVENT_KEY_DOWN:
+            case SDL_EVENT_KEY_UP:
+                handleInput(&e.key);
+                break;
+            case SDL_EVENT_QUIT:
+                return false;
         }
     }
 
@@ -20,19 +25,6 @@ bool update() {
     SDL_RenderTexture(gSDLRenderer, gSDLTexture, NULL, NULL);
     SDL_RenderPresent(gSDLRenderer);
     return true;
-}
-
-void loop() {
-    startTime = SDL_GetTicksNS();
-    for (int i = 0; i < 70224; i++) {
-        cpuTick();
-        ppuTick();
-    }
-    if (!update()) {
-        gDone = 1;
-    }
-    frameTime = SDL_GetTicksNS() - startTime;
-    if (frameTime < 16666666) SDL_DelayNS(16666666 - frameTime);
 }
 
 int main(int argc, char* argv[]) {
@@ -63,6 +55,22 @@ int main(int argc, char* argv[]) {
 void initialiseLCDProps() {
     LCDPROPS.LCDC = 0b10010011;
     LCDPROPS.LY = 0;
+}
+
+void loop() {
+    startTime = SDL_GetTicksNS();
+    if (!update()) {
+        gDone = 1;
+    }
+    for (int i = 0; i < 70224; i++) {
+        cpuTick();
+        ppuTick();
+        updateInputGB();
+        updateTimer();
+        cycles++;
+    }
+    frameTime = SDL_GetTicksNS() - startTime;
+    if (frameTime < 16666666) SDL_DelayNS(16666666 - frameTime);
 }
 
 void initialiseValues() {

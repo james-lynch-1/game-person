@@ -10,6 +10,7 @@ int WINDOW_HEIGHT;
 Cpu cpu;
 Ppu ppu;
 MMap mMap;
+int cycles = 0;
 
 Fetcher fetcher;
 

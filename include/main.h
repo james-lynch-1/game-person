@@ -6,6 +6,12 @@
 #include "cpu.h"
 #include "ppu.h"
 #include "global.h"
+#include "input.h"
+#include "timer.h"
+
+bool update();
+
+void loop();
 
 void initialiseLCDProps();
 

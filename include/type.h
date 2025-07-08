@@ -183,6 +183,13 @@ typedef struct LcdProps_ {
     u8 WX; // $FF4B. Window X position plus 7
 } LcdProps;
 
+typedef struct TimerAndDivider_ {
+    u8 div; // $FF04 Divider register
+    u8 tima; // $FF05 Timer counter
+    u8 tma; // $FF06 Timer modulo
+    u8 tac; // $FF07 Timer control
+} TimerAndDivider;
+
 #define LCDPROPS mMap.MMap_s.ioRegs.lcdProps
 
 // LCDC masks
@@ -199,7 +206,7 @@ typedef struct IORegs_ {
     u8 joypadInput; // $FF00
     u8 serialTransfer[2]; // $FF01-$FF02
     u8 filler1; // $FF03
-    u8 timerAndDivider[4]; // $FF04-$FF07
+    TimerAndDivider timerAndDivider; // $FF04-$FF07
     u8 filler2[7]; // $FF08-$FF0E
     u8 interrupts; // $FF0F
     u8 audio[23]; // $FF10-$FF26
