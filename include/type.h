@@ -132,7 +132,7 @@ typedef struct Fetcher_ {
     enum FetcherState state;
     int y;
     int mapAddr;
-    int tileID; // addr in MMAPARR
+    u8 tileID; // addr in MMAPARR
     int tileIndex; // index within map, to be added to addr of tilemap to get tileID
     Pixel tileData[8];
 } Fetcher;
@@ -215,6 +215,13 @@ typedef struct IORegs_ {
     u8 filler6[4]; // $FF6C-$FF6F
     u8 wRamBankSelect; // $FF70
 } IORegs;
+
+// flag masks for both the interrupt flag reg and the interrupt enable reg (same bit positions)
+#define INTR_VBLANK         0b00000001
+#define INTR_LCD            0b00000010
+#define INTR_TIMER          0b00000100
+#define INTR_SERIAL         0b00001000
+#define INTR_INTR_JOYPAD    0b00010000
 
 typedef union MMap_ {
     struct MMap_s_ {

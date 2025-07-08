@@ -75,6 +75,8 @@ void initialiseValues() {
     colourArr[2] = 0xff555555;
     colourArr[3] = 0xff000000;
 
+    memset(&mMap.MMap_s.rom.bank0_1, 0xFF, 32768);
+
     cpu.regs.file.PC = 0;
     cpu.ticks = 0;
     cpu.state = fetchOpcode;
@@ -87,6 +89,8 @@ void initialiseValues() {
     ppu.x = 0;
 
     initialiseLCDProps();
+
+    mMap.MMap_s.ioRegs.joypadInput = 0xCF;
 
     initialiseFIFO(&fetcher.bgFIFO);
     initialiseFIFO(&fetcher.objFIFO);
