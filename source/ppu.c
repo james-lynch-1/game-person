@@ -1,5 +1,7 @@
 #include "ppu.h"
 
+extern void requestInterrupt(int intr);
+
 // initialise the fetcher at the start of a line or the window
 void startFetcher(Fetcher* fetcher) {
     bool isWindow = ((LCDPROPS.LCDC & WINDOW_ENABLE_MASK) && (ppu.x > LCDPROPS.WX - 7) && (LCDPROPS.LY > LCDPROPS.WY));
@@ -83,10 +85,13 @@ void ppuTick() {
         case mode0: // hBlank
             if (ppu.ticks == 456) {
                 ppu.ticks = 0;
-                LCDPROPS.LY++;
+                if (++LCDPROPS.LY == LCDPROPS.LYC) {
+                    LCDPROPS.STAT |= 0b10;
+                    requestInterrupt(INTR_LCD);
+                }
                 if (LCDPROPS.LY == 144) {
                     ppu.state = mode1;
-                    mMap.MMap_s.iEReg |= 0b00000001;
+                    requestInterrupt(INTR_VBLANK);
                 }
                 else ppu.state = mode2;
             }
@@ -94,7 +99,10 @@ void ppuTick() {
         case mode1: // vBlank
             if (ppu.ticks == 456) {
                 ppu.ticks = 0;
-                LCDPROPS.LY++;
+                if (++LCDPROPS.LY == LCDPROPS.LYC) {
+                    LCDPROPS.STAT |= 0b10;
+                    requestInterrupt(INTR_LCD);
+                }
                 if (LCDPROPS.LY == 154) {
                     LCDPROPS.LY = 0;
                     ppu.state = mode2;

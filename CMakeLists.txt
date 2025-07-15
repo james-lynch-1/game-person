@@ -20,8 +20,9 @@ add_library(libgp SHARED ${CMAKE_SOURCE_DIR}/source/cpu.c
                          ${CMAKE_SOURCE_DIR}/source/global.c
                          ${CMAKE_SOURCE_DIR}/source/input.c
                          ${CMAKE_SOURCE_DIR}/source/interrupts.c
-                         ${CMAKE_SOURCE_DIR}/source/timer.c
                          ${CMAKE_SOURCE_DIR}/source/ppu.c
+                         ${CMAKE_SOURCE_DIR}/source/serial.c
+                         ${CMAKE_SOURCE_DIR}/source/timer.c
                          ${CMAKE_SOURCE_DIR}/source/util.c)
                          
 target_include_directories(libgp PUBLIC ${CMAKE_SOURCE_DIR}/include)

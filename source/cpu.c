@@ -1,45 +1,8 @@
 #include "cpu.h"
 
-// an operation can take no more than 6 cycles.
-// we split each opcode into atomic operations - makes defining them easier
-
 void(*opQ[6])(); int numOpsQueued; // counts down. Always pre-decrement when using.
 int pQ[32]; int pIndex; // these act as parameters for the micro-ops. Counts up. Always post-inc.
 void(*miscOp)(); // miscellaneous operation to be done at the end of the opqueue but doesn't incur cycles
-
-// atomic ops:
-/*
-General:
-NOP
-Next instr
-HALT
-STOP (actually 2 cycles but w/e)
-INC
-
-Arithmetic
-ADC
-ADD
-16-bit arithmetic op is just two 8-bit ops
-
-Load
-COPY VAL INTO REG
-GET IMMEDIATE VAL (aka increment romPtr, i think). increment should return a val. DONE
-GET VAL AT HL ADDR
-
-things we need to do
-read an opcode from memory
-read the opcode's parameters from memory (if any)
-update cpu internal state depending on that opcode and its parameters (if any).
-write a result to memory (if needed).
-
-basic ops: //
-read a byte from memory (1 cycle/4 ticks)
-write a byte to memory (1 cycle/4 ticks)
-update the cpu's internal state (effectively instantaneous)
-
-*/
-
-// do not incur cycles
 
 void doNothing() {
     return;
@@ -212,8 +175,6 @@ void readRegToReg16() { // dest 16-bit reg, source 16-bit reg
     pIndex += 2;
 }
 
-// incur cycles
-
 void readToPC() {
     cpu.regs.file.PC = REGARR16[pQ[pIndex++]];
 }
@@ -252,19 +213,27 @@ void writeByteToHighMem() { // address, value
 }
 
 void writeByteToMem() { // index of 16-bit reg holding address, value
+    // // ignore vram writes in mode 3 and oam writes in modes 2 & 3
+    // if ((ppu.state == mode3 && REGARR16[pQ[pIndex]] >= 0x8000 && REGARR16[pQ[pIndex]] <= 0x9FFF)
+    //     || ((ppu.state == mode2 || ppu.state == mode3) && REGARR16[pQ[pIndex]] >= 0xFE00 && REGARR16[pQ[pIndex]] <= 0xFE9F)) {
+    //     pIndex += 2;
+    //     return;
+    // }
     MMAPARR[REGARR16[pQ[pIndex]]] = (u8)pQ[pIndex + 1];
     pIndex += 2;
 }
 
 void writeRegToMem() { // index of 16-bit reg holding dest address, src reg index
-    MMAPARR[REGARR16[pQ[pIndex]]] = REGARR8[pQ[pIndex + 1]];
-    pIndex += 2;
+    pQ[pIndex + 1] = REGARR8[pQ[pIndex + 1]];
+    writeByteToMem();
 }
 
 void writeByteToMemAndDec() { // decrement the reg that held the dest addr
-    MMAPARR[REGARR16[pQ[pIndex]]] = pQ[pIndex + 1];
-    REGARR16[pQ[pIndex]]--;
-    pIndex += 2;
+    writeByteToMem();
+    REGARR16[pQ[pIndex - 2]]--;
+    // MMAPARR[REGARR16[pQ[pIndex]]] = pQ[pIndex + 1];
+    // REGARR16[pQ[pIndex]]--;
+    // pIndex += 2;
 }
 
 void jump() { // jump to value provided
@@ -305,11 +274,12 @@ void cmpCall() {
 }
 
 void cmpRet() {
-    int condition = pQ[pIndex++];
-    if (condition) { // operations will be done bottom to top
-        opQ[numOpsQueued++] = readToPC; pQ[pIndex + 4] = REGWZ_IDX;
-        opQ[numOpsQueued++] = readByteAndInc; pQ[pIndex + 2] = REGW_IDX; pQ[pIndex + 3] = REGSP_IDX;
-        opQ[numOpsQueued++] = readByteAndInc; pQ[pIndex] = REGZ_IDX; pQ[pIndex + 1] = REGSP_IDX;
+    int condition = pQ[pIndex];
+    if (condition) {
+        numOpsQueued = 3;
+        opQ[2] = readByteAndInc; pQ[0] = REGZ_IDX; pQ[1] = REGSP_IDX;
+        opQ[1] = readByteAndInc; pQ[2] = REGW_IDX; pQ[3] = REGSP_IDX;
+        opQ[0] = readToPC; pQ[4] = REGWZ_IDX;
     }
 }
 
@@ -394,15 +364,22 @@ void setIme() {
 void cpuTick() {
     if (++cpu.ticks < 4) return;
     cpu.ticks = 0;
-    u8 opcode;
     switch (cpu.state) {
         case fetchOpcode:
+            checkUnhandledInterrupts();
+            if (numISROpsQueued > 0) {
+                iSROpQ[--numISROpsQueued]();
+                if (numISROpsQueued == 0) {
+                    iSRMiscOp();
+                }
+                return;
+            }
             miscOp = doNothing;
             pIndex = 0;
             numOpsQueued = 0;
-            opcode = MMAP.rom.bank0_1[cpu.regs.file.PC++];
+            cpu.opcode = MMAP.rom.bank0_1[cpu.regs.file.PC++];
             if (!cpu.prefixedInstr)
-                switch (opcode) {
+                switch (cpu.opcode) {
                     case 0x00: // NOP 1 4 - - - -
                         break;
                     case 0x01: // LD BC n16 3 12 - - - -
@@ -1498,7 +1475,7 @@ void cpuTick() {
                         miscOp = readRegToReg; pQ[6] = REGA_IDX; pQ[7] = REGZ_IDX;
                         break;
                     case 0xFB: // EI 1 4 - - - -
-                        cpu.ime = true;
+                        setIme();
                         break;
                     case 0xFC: // ILLEGAL_FC 1 4 - - - -
                         break;
@@ -1515,7 +1492,7 @@ void cpuTick() {
                         break;
                 }
             else {
-                switch (opcode) {
+                switch (cpu.opcode) {
                     case 0x00: // RLC B 2 8 Z 0 0 C
                         pQ[0] = REGB_IDX;
                         rlc();

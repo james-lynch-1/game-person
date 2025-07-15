@@ -75,6 +75,7 @@ typedef struct Cpu_ {
     Registers regs;
     int ticks;
     enum CpuState state;
+    int opcode;
     bool prefixedInstr;
     bool ime; // interrupt master enable flag
 } Cpu;
@@ -221,18 +222,19 @@ typedef struct IORegs_ {
     u8 bgObjPalettes[4]; // $FF68-$FF6B
     u8 filler6[4]; // $FF6C-$FF6F
     u8 wRamBankSelect; // $FF70
+    u8 filler7[15]; // $FF71-$FF7F
 } IORegs;
 
 // flag masks for both the interrupt flag reg and the interrupt enable reg (same bit positions)
-#define INTR_VBLANK         0b00000001
-#define INTR_LCD            0b00000010
-#define INTR_TIMER          0b00000100
-#define INTR_SERIAL         0b00001000
-#define INTR_INTR_JOYPAD    0b00010000
+#define INTR_VBLANK 0b00000001
+#define INTR_LCD    0b00000010
+#define INTR_TIMER  0b00000100
+#define INTR_SERIAL 0b00001000
+#define INTR_JOYPAD 0b00010000
 
 typedef union MMap_ {
     struct MMap_s_ {
-        Rom rom; // $FF00-$3FFF (bank 0), $4000-$7FFF
+        Rom rom; // $0000-$3FFF (bank 0), $4000-$7FFF (bank 1)
         VRam vRam; // $8000-$9FFF
         u8 eWRam[0x2000]; // $A000-$BFFF
         u8 iWRam1[0x1000]; // $C000-$CFFF
