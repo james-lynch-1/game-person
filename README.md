@@ -20,6 +20,7 @@ Game Boy Color support
 [GB Opcode table](https://gbdev.io/gb-opcodes/optables)  
 [GB Opcode reference](https://rgbds.gbdev.io/docs/v0.9.3/gbz80.7)  
 [Game Boy: Complete Technical Reference](https://gekkio.fi/files/gb-docs/gbctr.pdf)  
+[Gameboy Doctor](https://github.com/robert/gameboy-doctor)  
 gbdev Discord  
 ## Building (on Linux using CMake):
 1. Clone the repository:  

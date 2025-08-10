@@ -3,7 +3,7 @@
 extern void requestInterrupt(int intr);
 
 void updateTimer() {
-    if ((cycles % 256 == 0)) MMAP.ioRegs.timerAndDivider.div++;
+    if (cycles % 256 == 0) MMAP.ioRegs.timerAndDivider.div++;
     bool tacEnabled = (MMAP.ioRegs.timerAndDivider.tac & 0b100) != 0;
     if (tacEnabled) {
         switch (MMAP.ioRegs.timerAndDivider.tac & 0b11) {
@@ -24,9 +24,10 @@ void updateTimer() {
                     MMAP.ioRegs.timerAndDivider.tima++;
                 break;
         }
-        if (MMAP.ioRegs.timerAndDivider.tima > 0xFF) {
+        if (MMAP.ioRegs.timerAndDivider.tima == 0) {
             MMAP.ioRegs.timerAndDivider.tima = MMAP.ioRegs.timerAndDivider.tma;
             requestInterrupt(INTR_TIMER);
         }
     }
+    if (cycles == 1024) cycles = 0;
 }

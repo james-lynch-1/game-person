@@ -2,6 +2,7 @@
 #define TYPE
 
 #include <stdint.h>
+
 // handy types
 #define u8  unsigned char
 #define u16 unsigned short
@@ -22,6 +23,7 @@
 // ROM:
 #define ROM_HEADER_ADDR 0x0100
 #define ROM_TITLE_ADDR  0x0134
+#define OAM_DMA_ADDR    0xFF46
 
 enum CpuState {
     fetchOpcode, executeInstruction
@@ -78,6 +80,7 @@ typedef struct Cpu_ {
     int opcode;
     bool prefixedInstr;
     bool ime; // interrupt master enable flag
+    int dmaCycle; // current DMA cycle completed
 } Cpu;
 
 // register indices in regs.arr8

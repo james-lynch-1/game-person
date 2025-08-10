@@ -13,8 +13,7 @@
 #define KEY_SEL     6
 #define KEY_START   7
 
-extern bool keys[8];
-extern u8 lastJoypadInput;
+extern int keys;
 
 void handleInput(SDL_KeyboardEvent* e);
 

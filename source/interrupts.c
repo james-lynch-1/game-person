@@ -32,8 +32,13 @@ void requestInterrupt(int intr) {
 }
 
 void handleInterrupt(int intr) {
-    if (!cpu.ime || !(MMAP.iEReg & intr))
+    if (!(MMAP.iEReg & intr))
         return;
+    if (!cpu.ime) {
+        if (cpu.opcode == 0x76)
+            cpu.opcode = MMAPARR[cpu.regs.file.PC]; // to escape HALT
+        return;
+    }
     int handlerAddr = 0x0;
     switch (intr) {
         case INTR_VBLANK:
@@ -70,7 +75,7 @@ void handleInterrupt(int intr) {
 
 void checkUnhandledInterrupts() {
     int intr;
-    for (int i = 0; i < 5; i++){
+    for (int i = 0; i < 5; i++) {
         intr = MMAP.ioRegs.interrupts & (1 << i);
         handleInterrupt(intr);
         if (intr) return;

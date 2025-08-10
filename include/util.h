@@ -9,7 +9,7 @@
 #include "math.h"
 #include "type.h"
 
-#define ROMVAL MMAP.rom.bank0_1[cpu.regs.file.PC++]
+#define ROMVAL MMAPARR[cpu.regs.file.PC++]
 
 // PixelFIFO functions
 

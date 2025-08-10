@@ -65,7 +65,6 @@ void loop() {
     for (int i = 0; i < 70224; i++) {
         cpuTick();
         ppuTick();
-        updateInputGB();
         updateTimer();
         cycles++;
     }
@@ -134,10 +133,10 @@ void initialiseHardwareRegs() {
 }
 
 void initialiseCpuRegs() {
-    cpu.regs.arr16[REGAF_IDX] = 0x8001;
-    cpu.regs.arr16[REGAF_IDX] = 0x0013;
-    cpu.regs.arr16[REGAF_IDX] = 0x00D8;
-    cpu.regs.arr16[REGAF_IDX] = 0x014D;
+    cpu.regs.arr16[REGAF_IDX] = 0x01B0;
+    cpu.regs.arr16[REGBC_IDX] = 0x0013;
+    cpu.regs.arr16[REGDE_IDX] = 0x00D8;
+    cpu.regs.arr16[REGHL_IDX] = 0x014D;
     cpu.regs.arr16[REGPC_IDX] = 0x0100;
     cpu.regs.arr16[REGSP_IDX] = 0xFFFE;
 }
@@ -154,15 +153,13 @@ void initialiseValues() {
 
     memset(&mMap.MMap_s.rom.bank0_1, 0xFF, 32768);
 
-    cpu.regs.file.PC = 0;
     cpu.ime = false;
     initialiseCpuRegs();
     initialiseHardwareRegs();
     cpu.ticks = 0;
     cpu.state = fetchOpcode;
     cpu.prefixedInstr = false;
-    for (int i = 0; i < 7; i++)
-        cpu.regs.arr16[i] = 0;
+    cpu.dmaCycle = 0;
 
     ppu.state = mode2;
     ppu.ticks = 0;
