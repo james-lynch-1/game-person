@@ -24,6 +24,7 @@
 #define ROM_HEADER_ADDR 0x0100
 #define ROM_TITLE_ADDR  0x0134
 #define OAM_DMA_ADDR    0xFF46
+#define MBC_TYPE_ADDR   0x0147
 
 enum CpuState {
     fetchOpcode, executeInstruction
@@ -32,7 +33,7 @@ enum PpuState {
     mode2, mode3, mode0, mode1 // OAM scan, drawing pixels, hBlank, vBlank
 };
 enum FetcherState {
-    getTile, getTileDataLow, getTileDataHigh, sleep, push
+    getTile, getTileDataLow, getTileDataHigh, push
 };
 
 /* CPU */
@@ -110,6 +111,13 @@ typedef struct Cpu_ {
 
 /* PPU */
 
+typedef struct OamEntry_ {
+    u8 yPos;
+    u8 xPos;
+    u8 tileIndex;
+    u8 attrs;
+} OamEntry;
+
 typedef struct Ppu_ {
     enum PpuState state;
     u32 ticks;
@@ -124,7 +132,7 @@ typedef struct Pixel_ {
 } Pixel;
 
 typedef struct PixelFIFO_ {
-    Pixel pixels[16];
+    Pixel pixels[8];
     int front;
     int rear;
 } PixelFIFO;
@@ -139,6 +147,10 @@ typedef struct Fetcher_ {
     u8 tileID; // addr in MMAPARR
     int tileIndex; // index within map, to be added to addr of tilemap to get tileID
     Pixel tileData[8];
+
+    bool fetchingObj;
+    int numObjsFetched;
+    OamEntry* currObj;
 } Fetcher;
 
 
@@ -243,7 +255,7 @@ typedef union MMap_ {
         u8 iWRam1[0x1000]; // $C000-$CFFF
         u8 iWRam2[0x1000]; // $D000-$DFFF
         u8 echoRam[0x1E00]; // $E000-$FDFF
-        u8 oam[0xA0]; // $FE00-$FE9F
+        OamEntry oamEntry[40]; // $FE00-$FE9F
         u8 filler[0x60]; // $FEA0-$FEFF
         IORegs ioRegs; // $FF00-$FF7F
         u8 hRam[127]; // $FF80-$FFFE

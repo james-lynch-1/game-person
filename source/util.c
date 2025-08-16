@@ -1,17 +1,30 @@
 #include "util.h"
 
+// insertion sort
+void sortScanlineObjs(OamEntry* scanlineObjs, int numScanlineObjs) {
+    for (int i = 1; i < numScanlineObjs; i++) {
+        OamEntry key = scanlineObjs[i];
+        int j = i - 1;
+        while (j >= 0 && scanlineObjs[j].xPos > key.xPos) {
+            scanlineObjs[j + 1] = scanlineObjs[j];
+            j--;
+        }
+        scanlineObjs[j + 1] = key;
+    }
+}
+
 // PixelFIFO functions
 
 void initialiseFIFO(PixelFIFO* FIFO) {
     Pixel p = { 0, 0, 0, 0 };
-    for (int i = 0; i < 16; i++)
+    for (int i = 0; i < 8; i++)
         FIFO->pixels[i] = p;
     FIFO->front = FIFO->rear = -1;
 }
 
 int getSizeFIFO(PixelFIFO* FIFO) {
     int size = FIFO->rear - FIFO->front;
-    if (size < 0) size += 16;
+    if (size < 0) size += 8;
     return ++size;
 }
 
@@ -20,17 +33,13 @@ bool isEmptyFIFO(PixelFIFO* FIFO) {
 }
 
 bool isFullFIFO(PixelFIFO* FIFO) {
-    return ((FIFO->rear + 1) % 16 == FIFO->front);
+    return ((FIFO->rear + 1) % 8 == FIFO->front);
 }
 
 void enqueue(PixelFIFO* FIFO, Pixel p) {
     if (isFullFIFO(FIFO)) return;
-    // if (isEmptyFIFO(FIFO)) {
-    //     FIFO->front = 0;
-    //     FIFO->rear = 0;
-    // }
     if (FIFO->front == -1) FIFO->front = 0;
-    FIFO->rear = (FIFO->rear + 1) % 16;
+    FIFO->rear = (FIFO->rear + 1) % 8;
     FIFO->pixels[FIFO->rear] = p;
 }
 
@@ -42,7 +51,7 @@ Pixel dequeue(PixelFIFO* FIFO) {
     if (FIFO->front == FIFO->rear)
         FIFO->front = FIFO->rear = -1;
     else
-        FIFO->front = (FIFO->front + 1) % 16;
+        FIFO->front = (FIFO->front + 1) % 8;
     return data;
 }
 

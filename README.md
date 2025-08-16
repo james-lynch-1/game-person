@@ -4,11 +4,11 @@ Work in progress. Reaches the Tetris title screen:
 ![tetris](https://github.com/user-attachments/assets/7062924b-db58-49ba-9d12-22de96daf4c3)  
 ## Implemented:
 All CPU instructions implemented at a micro-operation level; preserves timing (Blargg CPU tests passed)  
-Basic PPU (Pixel Processing Unit) implementation (just backgrounds, no sprites yet)  
+Basic PPU (Pixel Processing Unit) implementation  
 Basic input, timer, interrupts implementation  
 ## To do:
 Finish PPU  
-Finish input, timer, interrupts  
+Basic Memory Bank Controller (MBC) support  
 Implement audio  
 Game Boy Color support  
 ## Libraries used:

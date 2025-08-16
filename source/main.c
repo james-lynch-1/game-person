@@ -69,7 +69,7 @@ void loop() {
         cycles++;
     }
     frameTime = SDL_GetTicksNS() - startTime;
-    if (frameTime < 16666666) SDL_DelayNS(16666666 - frameTime);
+    if (frameTime < 16666666 && maxFPS == 60) SDL_DelayNS(16666666 - frameTime);
 }
 
 void initialiseHardwareRegs() {
@@ -143,7 +143,7 @@ void initialiseCpuRegs() {
 
 void initialiseValues() {
     maxFPS = 60;
-    scale = 4;
+    scale = 3;
     WINDOW_WIDTH = 160 * scale;
     WINDOW_HEIGHT = 144 * scale;
     colourArr[0] = 0xffffffff;
@@ -151,7 +151,7 @@ void initialiseValues() {
     colourArr[2] = 0xff555555;
     colourArr[3] = 0xff000000;
 
-    memset(&mMap.MMap_s.rom.bank0_1, 0xFF, 32768);
+    memset(&MMAPARR, 0xFF, 32768);
 
     cpu.ime = false;
     initialiseCpuRegs();
@@ -160,10 +160,12 @@ void initialiseValues() {
     cpu.state = fetchOpcode;
     cpu.prefixedInstr = false;
     cpu.dmaCycle = 0;
+    miscOp = doNothing;
 
     ppu.state = mode2;
     ppu.ticks = 0;
     ppu.x = 0;
+    numScanlineObjs = 0;
 
     initialiseFIFO(&fetcher.bgFIFO);
     initialiseFIFO(&fetcher.objFIFO);

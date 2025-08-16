@@ -16,3 +16,8 @@ cpu_instrs.gb
 09-op r,r.gb
 10-bit ops.gb
 11-op a,(hl).gb
+01-read_timing.gb
+02-write_timing.gb
+03-modify_timing.gb
+instr_timing.gb
+interrupt_time.gb

@@ -19,6 +19,8 @@ extern MMap mMap;
 extern int cycles;
 
 extern Fetcher fetcher;
+extern OamEntry scanlineObjs[10];
+extern int numScanlineObjs;
 
 // renderer stuff
 extern int* gFrameBuffer;

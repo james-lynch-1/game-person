@@ -11,6 +11,8 @@
 
 #define ROMVAL MMAPARR[cpu.regs.file.PC++]
 
+void sortScanlineObjs(OamEntry* scanlineObjs, int numScanlineObjs);
+
 // PixelFIFO functions
 
 void initialiseFIFO(PixelFIFO* FIFO);

@@ -13,6 +13,10 @@ MMap mMap;
 int cycles = 0;
 
 Fetcher fetcher;
+OamEntry scanlineObjs[10] = { {0, 0, 0, 0}, {0, 0, 0, 0}, {0, 0, 0, 0}, {0, 0, 0, 0},
+    {0, 0, 0, 0}, {0, 0, 0, 0}, {0, 0, 0, 0}, {0, 0, 0, 0},
+    {0, 0, 0, 0}, {0, 0, 0, 0} };
+int numScanlineObjs;
 
 int* gFrameBuffer;
 SDL_Window* gSDLWindow;
