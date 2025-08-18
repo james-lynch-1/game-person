@@ -1,7 +1,8 @@
 # GamePerson - Game Boy emulator written in C
 A Game Boy emulator  
-Work in progress. Reaches the Tetris title screen:  
-![tetris](https://github.com/user-attachments/assets/7062924b-db58-49ba-9d12-22de96daf4c3)  
+Work in progress. Behold Tetris:  
+![t](https://github.com/user-attachments/assets/1c979e19-da24-4b79-b3cd-824bd1abce01)
+
 ## Implemented:
 All CPU instructions implemented at a micro-operation level; preserves timing (Blargg CPU tests passed)  
 Basic PPU (Pixel Processing Unit) implementation  
