@@ -30,8 +30,8 @@ void fetcherTick(Fetcher* fetcher) {
         case getTile:
             if (fetcher->currObj)
                 fetcher->fetchingObj = true;
-            fetcher->mapAddr = ((LCDPROPS.LCDC & BG_TILEMAP_AREA_MASK) &&
-                (ppu.x < LCDPROPS.WX - 7) &&
+            fetcher->mapAddr = ((LCDPROPS.LCDC & BG_TILEMAP_AREA_MASK) ||
+                ppu.x < LCDPROPS.WX - 7 ||
                 (LCDPROPS.LY < LCDPROPS.WY)) ||
                 isWindow ? 0x9C00 : 0x9800;
             fetcher->tileID = fetcher->fetchingObj ? fetcher->currObj->tileIndex :

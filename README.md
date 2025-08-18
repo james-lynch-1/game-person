@@ -35,7 +35,15 @@ git clone https://github.com/libsdl-org/SDL.git vendored/SDL
 cmake -S . -B build  
 cmake --build build
 ```
+(For debug flags, use this command:)
+```
+cmake -DCMAKE_BUILD_TYPE=Debug build
+```
 4. Run:
 ```
-./build/Debug/gp
+./build/gp <path-to-ROM>
+```
+If you compiled with debug flags, run:
+```
+./build/Debug/gp <path-to-ROM>
 ```
