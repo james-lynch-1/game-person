@@ -3,6 +3,12 @@
 
 #include "global.h"
 
+void getTileData();
+
+void startFetcher();
+
+void fetcherTick();
+
 void ppuTick();
 
 #endif

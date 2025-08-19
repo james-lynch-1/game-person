@@ -46,15 +46,24 @@ void write(u16 dest, u8 val) {
         case 0xFF04: // divider register
             MMAPARR[dest] = 0;
             break;
+        case 0xFF0F: // IF - Interrupt flag
+            if ((val & (val - 1)) == 0)
+                requestInterrupt(val);
+            break;
         case OAM_DMA_ADDR:
             cpu.dmaCycle = 160;
             break;
         case 0xFF44: // LY read-only
             MMAPARR[dest] = oldVal;
             break;
-        case 0xFF47: // update colour palette if 0xFF47 has been written to
+        case 0xFF47: // update bg colour palette
             for (int i = 0; i < 4; i++)
-                colourArr[i] = 0xff000000 | (0x00555555 * (3 - (MMAPARR[0xFF47] >> (i * 2)) & 0b00000011));
+                bgPal[i] = 0xff000000 | (0x00555555 * (3 - (MMAPARR[dest] >> (i * 2)) & 0b00000011));
+            break;
+        case 0xFF48: // update obj colour palette 1
+        case 0xFF49: // update obj colour palette 2
+            for (int i = 0; i < 4; i++)
+                objPalArr[dest - 0xFF48][i] = 0xff000000 | (0x00555555 * (3 - (MMAPARR[0xFF48] >> (i * 2)) & 0b00000011));
             break;
         default:
             break;

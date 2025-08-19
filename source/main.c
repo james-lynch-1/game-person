@@ -146,10 +146,6 @@ void initialiseValues() {
     scale = 3;
     WINDOW_WIDTH = 160 * scale;
     WINDOW_HEIGHT = 144 * scale;
-    colourArr[0] = 0xffffffff;
-    colourArr[1] = 0xffaaaaaa;
-    colourArr[2] = 0xff555555;
-    colourArr[3] = 0xff000000;
 
     memset(&MMAPARR, 0xFF, 32768);
 

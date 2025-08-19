@@ -22,4 +22,8 @@ int* gFrameBuffer;
 SDL_Window* gSDLWindow;
 SDL_Renderer* gSDLRenderer;
 SDL_Texture* gSDLTexture;
-int colourArr[4];
+int bgPal[4] = {0xffffffff, 0xffaaaaaa, 0xff555555, 0xff000000};
+int objPalArr[2][4] = {
+    {0xffffffff, 0xffaaaaaa, 0xff555555, 0xff000000},
+    {0xffffffff, 0xffaaaaaa, 0xff555555, 0xff000000}
+};

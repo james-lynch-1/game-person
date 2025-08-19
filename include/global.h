@@ -27,7 +27,8 @@ extern int* gFrameBuffer;
 extern SDL_Window* gSDLWindow;
 extern SDL_Renderer* gSDLRenderer;
 extern SDL_Texture* gSDLTexture;
-extern int colourArr[4];
+extern int bgPal[4];
+extern int objPalArr[2][4];
 static int gDone;
 
 #endif

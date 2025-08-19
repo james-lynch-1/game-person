@@ -1,9 +1,7 @@
 #ifndef CPU
 #define CPU
 
-#include "util.h"
 #include "global.h"
-#include "type.h"
 
 extern void(*opQ[6])(); extern int numOpsQueued; // counts down. Always pre-decrement when using.
 extern int pQ[32]; extern int pIndex; // these act as parameters for the micro-ops. Counts up. Always post-inc.

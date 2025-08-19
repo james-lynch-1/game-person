@@ -247,6 +247,13 @@ typedef struct IORegs_ {
 #define INTR_SERIAL 0b00001000
 #define INTR_JOYPAD 0b00010000
 
+// flag masks for $FF41: STAT (LCD status) register
+#define STAT_LYC    0b01000000
+#define STAT_MODE2  0b00100000
+#define STAT_MODE1  0b00010000
+#define STAT_MODE0  0b00001000
+#define STAT_LYC_LY 0b00000100
+
 typedef union MMap_ {
     struct MMap_s_ {
         Rom rom; // $0000-$3FFF (bank 0), $4000-$7FFF (bank 1)
