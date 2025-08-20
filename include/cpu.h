@@ -2,6 +2,7 @@
 #define CPU
 
 #include "global.h"
+#include "serial.h"
 
 extern void(*opQ[6])(); extern int numOpsQueued; // counts down. Always pre-decrement when using.
 extern int pQ[32]; extern int pIndex; // these act as parameters for the micro-ops. Counts up. Always post-inc.

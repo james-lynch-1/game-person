@@ -145,8 +145,8 @@ typedef struct Fetcher_ {
     int y;
     int mapAddr;
     u8 tileID; // addr in MMAPARR
-    int tileIndex; // index within map, to be added to addr of tilemap to get tileID
     Pixel tileData[8];
+    bool isWindow;
 
     bool fetchingObj;
     int numObjsFetched;

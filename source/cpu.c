@@ -40,8 +40,8 @@ void write(u16 dest, u8 val) {
         case 0xFF00: // input
             updateInputGB();
             break;
-        case 0xFF01: // serial (for test roms currently)
-            doNothing();
+        case 0xFF02: // serial (for test roms currently)
+            handleSCWrite(val);
             break;
         case 0xFF04: // divider register
             MMAPARR[dest] = 0;
@@ -58,12 +58,12 @@ void write(u16 dest, u8 val) {
             break;
         case 0xFF47: // update bg colour palette
             for (int i = 0; i < 4; i++)
-                bgPal[i] = 0xff000000 | (0x00555555 * (3 - (MMAPARR[dest] >> (i * 2)) & 0b00000011));
+                bgPal[i] = 0xff000000 | (0x00555555 * (3 - (val >> (i * 2)) & 0b00000011));
             break;
         case 0xFF48: // update obj colour palette 1
         case 0xFF49: // update obj colour palette 2
             for (int i = 0; i < 4; i++)
-                objPalArr[dest - 0xFF48][i] = 0xff000000 | (0x00555555 * (3 - (MMAPARR[0xFF48] >> (i * 2)) & 0b00000011));
+                objPalArr[dest - 0xFF48][i] = 0xff000000 | (0x00555555 * (3 - (val >> (i * 2)) & 0b00000011));
             break;
         default:
             break;
