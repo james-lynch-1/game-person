@@ -5,7 +5,6 @@ extern void requestInterrupt(int intr);
 int keys = 0;
 
 void handleInput(SDL_KeyboardEvent* e) {
-    SDL_Event keyEvent;
     switch (e->key) {
         case SDLK_TAB:
             maxFPS = e->type == SDL_EVENT_KEY_DOWN ? 0 : 60;
@@ -33,6 +32,19 @@ void handleInput(SDL_KeyboardEvent* e) {
             break;
         case SDLK_RETURN:
             keys = e->type == SDL_EVENT_KEY_DOWN ? keys | 0x80 : keys & ~0x80;
+            break;
+        default:
+            break;
+    }
+}
+
+void handleGamepadInput(SDL_GamepadButtonEvent* e) {
+    switch (e->button) {
+        case SDL_GAMEPAD_BUTTON_EAST:
+            keys = e->type == SDL_EVENT_GAMEPAD_BUTTON_DOWN ? keys | 0x10 : keys & ~0x10;
+            break;
+        case SDL_GAMEPAD_BUTTON_START:
+            keys = e->type == SDL_EVENT_GAMEPAD_BUTTON_DOWN ? keys | 0x80 : keys & ~0x80;
             break;
         default:
             break;

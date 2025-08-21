@@ -17,6 +17,8 @@ extern int keys;
 
 void handleInput(SDL_KeyboardEvent* e);
 
+void handleGamepadInput(SDL_GamepadButtonEvent* e);
+
 void updateInputGB();
 
 #endif

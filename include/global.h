@@ -17,6 +17,9 @@ extern Cpu cpu;
 extern Ppu ppu;
 extern MMap mMap;
 extern int cycles;
+extern bool externalRamEnabled;
+extern u8 romFile[32][16384];
+extern int fileSize;
 
 extern Fetcher fetcher;
 extern OamEntry scanlineObjs[10];

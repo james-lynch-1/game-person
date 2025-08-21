@@ -11,79 +11,98 @@ void doNothing() {
     return;
 }
 
+void switchRomBank(int bankNum) {
+    if (fileSize <= 32768) return;
+    int romFileBankIndex = bankNum;
+    if (!romFileBankIndex) romFileBankIndex = 1;
+    memcpy(MMAP.rom.Rom_s.bank1, &romFile[bankNum], 16384);
+}
+
 void write(u16 dest, u8 val) {
-    // // ignore VRAM writes in mode 3 and OAM writes in modes 2 & 3
-    // bool lcdEnabled = (LCDPROPS.LCDC & LCD_PPU_ENABLE_MASK) >> 7;
-    // bool inM3 = ppu.state == mode3;
-    // bool inM2 = ppu.state == mode2;
-    // bool destInVram = dest >= 0x8000 && dest <= 0x9FFF;
-    // bool destInOAM = dest >= 0xFE00 && dest <= 0xFE9F;
-    // if (lcdEnabled &&
-    //     ((inM3 && destInVram) ||
-    //         ((inM2 || inM3) && destInOAM))) {
-    //     pIndex += 2;
-    //     return;
-    // }
-    // if (lcdEnabled && inM3 && destInVram) {
-    //     pIndex += 2;
-    //     return;
-    // }
-    if (dest < 0x8000) { // can't write to ROM
-        pIndex += 2;
-        return;
-    }
     int oldVal = MMAPARR[dest];
-    MMAPARR[dest] = val;
-    switch (dest) { // dest address
-        case 0x9800:
+    pIndex += 2;
+    switch (dest >> 12) {
+        case 0: case 1: case 2: case 3: // rom bank 0
+            if (dest < 0x2000 && val == 0xA)
+                externalRamEnabled = true;
+            else if (dest < 0x4000)
+                switchRomBank(val & 0x1F);
             break;
-        case 0xFF00: // input
-            updateInputGB();
+        case 4: case 5: case 6: case 7: // rom bank 1
             break;
-        case 0xFF02: // serial (for test roms currently)
-            handleSCWrite(val);
+        case 8: case 9: // vram
+            // can't write to VRAM when drawing pixels
+            if ((LCDPROPS.LCDC & LCD_PPU_ENABLE_MASK) && (ppu.state == mode3))
+                break;
+        case 0xA: case 0xB: // a,b: external ram, if any
+        case 0xC: case 0xD: // work ram
+            MMAPARR[dest] = val;
             break;
-        case 0xFF04: // divider register
-            MMAPARR[dest] = 0;
+        case 0xE: // echo ram, ignoring for now
             break;
-        case 0xFF0F: // IF - Interrupt flag
-            if ((val & (val - 1)) == 0)
-                requestInterrupt(val);
-            break;
-        case OAM_DMA_ADDR:
-            cpu.dmaCycle = 160;
-            break;
-        case 0xFF44: // LY read-only
-            MMAPARR[dest] = oldVal;
-            break;
-        case 0xFF47: // update bg colour palette
-            for (int i = 0; i < 4; i++)
-                bgPal[i] = 0xff000000 | (0x00555555 * (3 - (val >> (i * 2)) & 0b00000011));
-            break;
-        case 0xFF48: // update obj colour palette 1
-        case 0xFF49: // update obj colour palette 2
-            for (int i = 0; i < 4; i++)
-                objPalArr[dest - 0xFF48][i] = 0xff000000 | (0x00555555 * (3 - (val >> (i * 2)) & 0b00000011));
+        case 0xF: // oam, io regs, high ram, interrupt enable register
+            switch (dest >> 8) {
+                case 0xFE: // oam
+                    if (dest >= 0xFE00 && dest <= 0xFE9F && ppu.state > mode3)
+                        MMAPARR[dest] = val;
+                    break;
+                case 0xFF: // io registers
+                    MMAPARR[dest] = val;
+                    switch (dest) {
+                        case 0xFF00: // input
+                            updateInputGB();
+                            break;
+                        case 0xFF02: // serial (for test roms currently)
+                            handleSCWrite(val);
+                            break;
+                        case 0xFF04: // divider register
+                            MMAPARR[dest] = 0;
+                            break;
+                        case 0xFF0F: // IF - Interrupt flag
+                            if ((val & (val - 1)) == 0)
+                                requestInterrupt(val);
+                            break;
+                        case OAM_DMA_ADDR:
+                            cpu.dmaCycle = 160;
+                            break;
+                        case 0xFF44: // LY read-only
+                            MMAPARR[dest] = oldVal;
+                            break;
+                        case 0xFF47: // update bg colour palette
+                            for (int i = 0; i < 4; i++)
+                                bgPal[i] = 0xff000000 | (0x00555555 * (3 - (val >> (i * 2)) & 0b00000011));
+                            break;
+                        case 0xFF48: // update obj colour palette 1
+                        case 0xFF49: // update obj colour palette 2
+                            for (int i = 0; i < 4; i++)
+                                objPalArr[dest - 0xFF48][i] = 0xff000000 | (0x00555555 * (3 - (val >> (i * 2)) & 0b00000011));
+                            break;
+                        default:
+                            break;
+                    }
+                default:
+                    break;
+            }
             break;
         default:
             break;
     }
-    pIndex += 2;
+
 }
 
 // Safely reads from memory to an 8-bit register. Checks if access is blocked
 void read(int destRegIndex, u16 addr) {
-    // bool lcdEnabled = (LCDPROPS.LCDC & LCD_PPU_ENABLE_MASK) >> 7;
-    // bool inM3 = ppu.state == mode3;
-    // bool inM2 = ppu.state == mode2;
-    // bool addrInVram = addr >= 0x8000 && addr <= 0x9FFF;
-    // bool addrInOAM = addr >= 0xFE00 && addr <= 0xFE9F;
-    // if (lcdEnabled &&
-    //     ((inM3 && addrInVram) ||
-    //         ((inM2 || inM3) && addrInOAM))) {
-    //     REGARR8[destRegIndex] = 0xFF;
-    //     return;
-    // }
+    bool lcdEnabled = (LCDPROPS.LCDC & LCD_PPU_ENABLE_MASK) >> 7;
+    bool inM3 = ppu.state == mode3;
+    bool inM2 = ppu.state == mode2;
+    bool addrInVram = addr >= 0x8000 && addr <= 0x9FFF;
+    bool addrInOAM = addr >= 0xFE00 && addr <= 0xFE9F;
+    if (lcdEnabled &&
+        ((inM3 && addrInVram) ||
+            ((inM2 || inM3) && addrInOAM))) {
+        REGARR8[destRegIndex] = 0xFF;
+        return;
+    }
     REGARR8[destRegIndex] = MMAPARR[addr];
 }
 

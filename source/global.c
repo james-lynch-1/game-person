@@ -11,6 +11,9 @@ Cpu cpu;
 Ppu ppu;
 MMap mMap;
 int cycles = 0;
+bool externalRamEnabled = false;
+u8 romFile[32][16384];
+int fileSize;
 
 Fetcher fetcher;
 OamEntry scanlineObjs[10] = { {0, 0, 0, 0}, {0, 0, 0, 0}, {0, 0, 0, 0}, {0, 0, 0, 0},

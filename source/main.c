@@ -37,7 +37,8 @@ int main(int argc, char* argv[]) {
         exit(1);
     }
     initialiseValues();
-    fread(MMAP.rom.bank0_1, 4, 0x2000, romPtr);
+    fread(&romFile, 4, fileSize, romPtr);
+    memcpy(MMAP.rom.bank0_1, &romFile, 0x8000);
     setTitle();
 
     if (!initialiseVideo()) return -1;
@@ -143,11 +144,14 @@ void initialiseCpuRegs() {
 
 void initialiseValues() {
     maxFPS = 60;
-    scale = 3;
+    scale = 6;
     WINDOW_WIDTH = 160 * scale;
     WINDOW_HEIGHT = 144 * scale;
 
     memset(&MMAPARR, 0xFF, 32768);
+    fseek(romPtr, 0, SEEK_END);
+    fileSize = ftell(romPtr);
+    fseek(romPtr, 0, SEEK_SET);
 
     cpu.ime = false;
     initialiseCpuRegs();
