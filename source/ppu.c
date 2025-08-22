@@ -112,7 +112,7 @@ void fetcherTick() {
 
 void ppuTick() {
     Pixel bgPixel, objPixel;
-    int size, oamEntryNum, offset8x16, adjustedLYObjPos;
+    int size, oamEntryNum, offset8x16, adjustedLYObjPos, prevSTAT = 0;
     ppu.ticks++;
     switch (ppu.state) {
         case mode2: // OAM scan
@@ -171,9 +171,10 @@ void ppuTick() {
             ppu.x++;
             if (ppu.x == 160) {
                 ppu.state = mode0;
+                prevSTAT = LCDPROPS.STAT & 0b11111100;
                 LCDPROPS.STAT &= 0b11111100;
-                if (LCDPROPS.STAT & STAT_MODE0)
-                    requestInterrupt(INTR_LCD);
+                LCDPROPS.STAT |= 0b00001000;
+                if (!prevSTAT) requestInterrupt(INTR_LCD);
             }
             break;
         case mode0: // hBlank
@@ -181,23 +182,24 @@ void ppuTick() {
                 ppu.ticks = 0;
                 numScanlineObjs = 0;
                 if (++LCDPROPS.LY == LCDPROPS.LYC) {
+                    prevSTAT = LCDPROPS.STAT;
                     LCDPROPS.STAT |= STAT_LYC_LY;
-                    requestInterrupt(INTR_LCD);
+                    if (!prevSTAT) requestInterrupt(INTR_LCD);
                 }
                 if (LCDPROPS.LY == 144) {
                     ppu.state = mode1;
+                    prevSTAT = LCDPROPS.STAT & 0b11111100;
                     LCDPROPS.STAT &= 0b11111100;
-                    LCDPROPS.STAT |= 0b01;
-                    if (LCDPROPS.STAT & STAT_MODE1)
-                        requestInterrupt(INTR_LCD);
+                    LCDPROPS.STAT |= 0b00010001;
+                    if (!prevSTAT) requestInterrupt(INTR_LCD);
                     requestInterrupt(INTR_VBLANK);
                 }
                 else {
                     ppu.state = mode2;
+                    prevSTAT = LCDPROPS.STAT & 0b11111100;
                     LCDPROPS.STAT &= 0b11111100;
-                    LCDPROPS.STAT |= 0b10;
-                    if (LCDPROPS.STAT & STAT_MODE2)
-                        requestInterrupt(INTR_LCD);
+                    LCDPROPS.STAT |= 0b00100010;
+                    if (!prevSTAT) requestInterrupt(INTR_LCD);
                 }
             }
             break;
@@ -205,16 +207,17 @@ void ppuTick() {
             if (ppu.ticks == 456) {
                 ppu.ticks = 0;
                 if (++LCDPROPS.LY == LCDPROPS.LYC) {
+                    prevSTAT = LCDPROPS.STAT & 0b11111100;
                     LCDPROPS.STAT |= STAT_LYC_LY;
-                    requestInterrupt(INTR_LCD);
+                    if (!prevSTAT) requestInterrupt(INTR_LCD);
                 }
                 if (LCDPROPS.LY == 154) {
                     LCDPROPS.LY = 0;
                     ppu.state = mode2;
+                    prevSTAT = LCDPROPS.STAT & 0b11111100;
                     LCDPROPS.STAT &= 0b11111100;
-                    LCDPROPS.STAT |= 0b10;
-                    if (LCDPROPS.STAT & STAT_MODE2)
-                        requestInterrupt(INTR_LCD);
+                    LCDPROPS.STAT |= 0b00100010;
+                    if (!prevSTAT) requestInterrupt(INTR_LCD);
                     numScanlineObjs = 0;
                 }
             }

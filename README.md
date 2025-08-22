@@ -20,7 +20,10 @@ Game Boy Color support
 [GB Opcode table](https://gbdev.io/gb-opcodes/optables)  
 [GB Opcode reference](https://rgbds.gbdev.io/docs/v0.9.3/gbz80.7)  
 [Game Boy: Complete Technical Reference](https://gekkio.fi/files/gb-docs/gbctr.pdf)  
-[Gameboy Doctor](https://github.com/robert/gameboy-doctor)  
+[Blargg tests](https://gbdev.gg8.se/files/roms/blargg-gb-tests/)  
+[Gameboy Doctor](https://github.com/robert/gameboy-doctor) for testing output of Blargg cpu instruction tests  
+[Mooneye Test Suite](https://github.com/Gekkio/mooneye-test-suite)  
+[Gameboy Emulator Development Guide](https://github.com/Hacktix/GBEDG)  
 gbdev Discord  
 ## Building (on Linux using CMake):
 1. Clone the repository:  

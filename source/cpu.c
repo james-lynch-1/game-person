@@ -19,8 +19,10 @@ void switchRomBank(int bankNum) {
 }
 
 void write(u16 dest, u8 val) {
-    int oldVal = MMAPARR[dest];
     pIndex += 2;
+    if (cpu.dmaCycle && dest < 0xFF80 && dest > 0xFFFE) // during OAM DMA, can only access HRAM
+        return;
+    int oldVal = MMAPARR[dest];
     switch (dest >> 12) {
         case 0: case 1: case 2: case 3: // rom bank 0
             if (dest < 0x2000 && val == 0xA)
@@ -43,7 +45,8 @@ void write(u16 dest, u8 val) {
         case 0xF: // oam, io regs, high ram, interrupt enable register
             switch (dest >> 8) {
                 case 0xFE: // oam
-                    if (dest >= 0xFE00 && dest <= 0xFE9F && ppu.state > mode3)
+                    if (dest >= 0xFE00 && dest <= 0xFE9F &&
+                        (ppu.state > mode3 || !(LCDPROPS.LCDC & LCD_PPU_ENABLE_MASK)))
                         MMAPARR[dest] = val;
                     break;
                 case 0xFF: // io registers
@@ -52,21 +55,29 @@ void write(u16 dest, u8 val) {
                         case 0xFF00: // input
                             updateInputGB();
                             break;
-                        case 0xFF02: // serial (for test roms currently)
+                        case 0xFF02: // serial
+                            MMAPARR[0xFF01] = 0xFF;
                             handleSCWrite(val);
                             break;
                         case 0xFF04: // divider register
                             MMAPARR[dest] = 0;
+                            cycles = 0;
+                            // resetCycles = true;
                             break;
                         case 0xFF0F: // IF - Interrupt flag
-                            if ((val & (val - 1)) == 0)
-                                requestInterrupt(val);
+                            for (int i = 0; i < 8; i++)
+                                requestInterrupt(val & (1 << i));
                             break;
-                        case OAM_DMA_ADDR:
-                            cpu.dmaCycle = 160;
+                        case 0xFF41: // STAT register
+                            MMAPARR[dest] = (oldVal & 0b11111000) | (val & 0b00000111);
+                            if (val && !MMAPARR[0xFF41] && (LCDPROPS.LCDC & LCD_PPU_ENABLE_MASK))
+                                requestInterrupt(INTR_LCD);
                             break;
                         case 0xFF44: // LY read-only
                             MMAPARR[dest] = oldVal;
+                            break;
+                        case OAM_DMA_ADDR:
+                            cpu.dmaCycle = 160;
                             break;
                         case 0xFF47: // update bg colour palette
                             for (int i = 0; i < 4; i++)
@@ -97,9 +108,10 @@ void read(int destRegIndex, u16 addr) {
     bool inM2 = ppu.state == mode2;
     bool addrInVram = addr >= 0x8000 && addr <= 0x9FFF;
     bool addrInOAM = addr >= 0xFE00 && addr <= 0xFE9F;
-    if (lcdEnabled &&
-        ((inM3 && addrInVram) ||
-            ((inM2 || inM3) && addrInOAM))) {
+    if ((cpu.dmaCycle && addr < 0xFF80 && addr > 0xFFFE) ||
+        (lcdEnabled &&
+            ((inM3 && addrInVram) ||
+                ((inM2 || inM3) && addrInOAM)))) {
         REGARR8[destRegIndex] = 0xFF;
         return;
     }

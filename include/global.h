@@ -16,7 +16,12 @@ extern int WINDOW_HEIGHT;
 extern Cpu cpu;
 extern Ppu ppu;
 extern MMap mMap;
-extern int cycles;
+
+// timer
+extern u16 cycles;
+extern int andResult;
+extern bool timaOverflow;
+
 extern bool externalRamEnabled;
 extern u8 romFile[32][16384];
 extern int fileSize;

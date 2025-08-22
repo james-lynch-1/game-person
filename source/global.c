@@ -10,7 +10,12 @@ int WINDOW_HEIGHT;
 Cpu cpu;
 Ppu ppu;
 MMap mMap;
-int cycles = 0;
+
+// timer
+u16 cycles = 0;
+int andResult;
+bool timaOverflow = false;
+
 bool externalRamEnabled = false;
 u8 romFile[32][16384];
 int fileSize;
