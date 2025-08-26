@@ -20,11 +20,16 @@ extern MMap mMap;
 // timer
 extern u16 cycles;
 extern int andResult;
-extern bool timaOverflow;
+extern int timaOverflow;
+extern bool timaUnsettable;
 
 extern bool externalRamEnabled;
 extern u8 romFile[32][16384];
+extern u8 externalRam[16][8192];
+extern int currRamBank;
 extern int fileSize;
+extern int romSize;
+extern int romSizeLUT[12][3];
 
 extern Fetcher fetcher;
 extern OamEntry scanlineObjs[10];

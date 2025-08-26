@@ -112,7 +112,7 @@ void fetcherTick() {
 
 void ppuTick() {
     Pixel bgPixel, objPixel;
-    int size, oamEntryNum, offset8x16, adjustedLYObjPos, prevSTAT = 0;
+    int size, oamEntryNum, offset8x16, adjustedLYObjPos, prevStatIntr = cpu.statIntrLine;
     ppu.ticks++;
     switch (ppu.state) {
         case mode2: // OAM scan
@@ -127,8 +127,8 @@ void ppuTick() {
             if (ppu.ticks == 80) {
                 sortScanlineObjs(scanlineObjs, numScanlineObjs);
                 ppu.state = mode3;
-                LCDPROPS.STAT &= 0b11111100;
-                LCDPROPS.STAT |= 0b11;
+                LCDPROPS.STAT = (LCDPROPS.STAT & 0b11111100) | 0b11;
+                cpu.statIntrLine &= ~STAT_MODE2;
                 ppu.x = 0;
                 startFetcher();
             }
@@ -171,56 +171,60 @@ void ppuTick() {
             ppu.x++;
             if (ppu.x == 160) {
                 ppu.state = mode0;
-                prevSTAT = LCDPROPS.STAT & 0b11111100;
+                cpu.statIntrLine |= LCDPROPS.STAT & STAT_MODE0;
                 LCDPROPS.STAT &= 0b11111100;
-                LCDPROPS.STAT |= 0b00001000;
-                if (!prevSTAT) requestInterrupt(INTR_LCD);
+                if (cpu.statIntrLine && !prevStatIntr)
+                    requestInterrupt(INTR_LCD);
             }
             break;
         case mode0: // hBlank
             if (ppu.ticks == 456) {
                 ppu.ticks = 0;
                 numScanlineObjs = 0;
+                cpu.statIntrLine &= ~STAT_MODE0;
                 if (++LCDPROPS.LY == LCDPROPS.LYC) {
-                    prevSTAT = LCDPROPS.STAT;
                     LCDPROPS.STAT |= STAT_LYC_LY;
-                    if (!prevSTAT) requestInterrupt(INTR_LCD);
+                    cpu.statIntrLine |= LCDPROPS.STAT & STAT_LYC;
                 }
+                else
+                    LCDPROPS.STAT &= ~STAT_LYC_LY;
                 if (LCDPROPS.LY == 144) {
                     ppu.state = mode1;
-                    prevSTAT = LCDPROPS.STAT & 0b11111100;
-                    LCDPROPS.STAT &= 0b11111100;
-                    LCDPROPS.STAT |= 0b00010001;
-                    if (!prevSTAT) requestInterrupt(INTR_LCD);
+                    cpu.statIntrLine |= LCDPROPS.STAT & STAT_MODE1;
+                    LCDPROPS.STAT = (LCDPROPS.STAT & 0b11111100) | 0b01;
                     requestInterrupt(INTR_VBLANK);
                 }
                 else {
                     ppu.state = mode2;
-                    prevSTAT = LCDPROPS.STAT & 0b11111100;
-                    LCDPROPS.STAT &= 0b11111100;
-                    LCDPROPS.STAT |= 0b00100010;
-                    if (!prevSTAT) requestInterrupt(INTR_LCD);
+                    cpu.statIntrLine |= LCDPROPS.STAT & STAT_MODE2;
+                    LCDPROPS.STAT = (LCDPROPS.STAT & 0b11111100) | 0b10;
                 }
+                if (cpu.statIntrLine && !prevStatIntr)
+                    requestInterrupt(INTR_LCD);
             }
             break;
         case mode1: // vBlank
             if (ppu.ticks == 456) {
                 ppu.ticks = 0;
-                if (++LCDPROPS.LY == LCDPROPS.LYC) {
-                    prevSTAT = LCDPROPS.STAT & 0b11111100;
+                LCDPROPS.LY = (LCDPROPS.LY + 1) % 154;
+                if (LCDPROPS.LY == LCDPROPS.LYC) {
                     LCDPROPS.STAT |= STAT_LYC_LY;
-                    if (!prevSTAT) requestInterrupt(INTR_LCD);
+                    cpu.statIntrLine |= LCDPROPS.STAT & STAT_LYC;
                 }
-                if (LCDPROPS.LY == 154) {
-                    LCDPROPS.LY = 0;
+                else
+                    LCDPROPS.STAT &= ~STAT_LYC_LY;
+                if (LCDPROPS.LY == 0) {
                     ppu.state = mode2;
-                    prevSTAT = LCDPROPS.STAT & 0b11111100;
-                    LCDPROPS.STAT &= 0b11111100;
-                    LCDPROPS.STAT |= 0b00100010;
-                    if (!prevSTAT) requestInterrupt(INTR_LCD);
+                    LCDPROPS.STAT = (LCDPROPS.STAT & 0b11111100) | 0b10;
+                    cpu.statIntrLine &= ~STAT_MODE1;
+                    cpu.statIntrLine |= LCDPROPS.STAT & STAT_MODE2;
                     numScanlineObjs = 0;
                 }
             }
+            else
+                cpu.statIntrLine |= LCDPROPS.STAT & STAT_MODE1;
+            if (cpu.statIntrLine && !prevStatIntr)
+                requestInterrupt(INTR_LCD);
             break;
     }
 }

@@ -7,9 +7,10 @@ Work in progress. Behold Tetris:
 All CPU instructions implemented at a micro-operation level; preserves timing (Blargg CPU tests passed)  
 Basic PPU (Pixel Processing Unit) implementation  
 Basic input, timer, interrupts implementation  
+Basic Memory Bank Controller (MBC1) support  
 ## To do:
 Finish PPU  
-Basic Memory Bank Controller (MBC) support  
+Pass all mooneye tests  
 Implement audio  
 Game Boy Color support  
 ## Libraries used:

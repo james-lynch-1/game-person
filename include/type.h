@@ -76,11 +76,15 @@ typedef union Registers_ {
 
 typedef struct Cpu_ {
     Registers regs;
+    u8 joypIntrLine;
+    u8 statIntrLine;
     int ticks;
     enum CpuState state;
     int opcode;
     bool prefixedInstr;
     bool ime; // interrupt master enable flag
+    bool halt;
+    int repeatPC; // usually set to 0, except when emulating HALT bug
     int dmaCycle; // current DMA cycle completed
 } Cpu;
 

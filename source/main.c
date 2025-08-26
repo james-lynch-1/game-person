@@ -37,8 +37,10 @@ int main(int argc, char* argv[]) {
         exit(1);
     }
     initialiseValues();
-    fread(&romFile, 4, fileSize, romPtr);
+    fread(&romFile, 4, fileSize / 4, romPtr);
     memcpy(MMAP.rom.bank0_1, &romFile, 0x8000);
+    if (fileSize < 32768)
+        memset(MMAP.rom.bank0_1 + fileSize, 0xFF, 32768 - fileSize);
     setTitle();
 
     if (!initialiseVideo()) return -1;
@@ -64,10 +66,11 @@ void loop() {
         gDone = 1;
     }
     for (int i = 0; i < 70224; i++) {
+        updateTimer();
         cpuTick();
         ppuTick();
-        updateTimer();
         cycles++;
+        timaUnsettable = false;
     }
     frameTime = SDL_GetTicksNS() - startTime;
     if (frameTime < 16666666 && maxFPS == 60) SDL_DelayNS(16666666 - frameTime);
@@ -138,7 +141,7 @@ void initialiseCpuRegs() {
     cpu.regs.arr16[REGBC_IDX] = 0x0013;
     cpu.regs.arr16[REGDE_IDX] = 0x00D8;
     cpu.regs.arr16[REGHL_IDX] = 0x014D;
-    cpu.regs.arr16[REGPC_IDX] = 0x0100;
+    cpu.regs.arr16[REGPC_IDX] = fileSize == 256 ? 0 : 0x0100;
     cpu.regs.arr16[REGSP_IDX] = 0xFFFE;
 }
 
@@ -149,16 +152,22 @@ void initialiseValues() {
     WINDOW_HEIGHT = 144 * scale;
 
     memset(&MMAPARR, 0xFF, 32768);
+    memset(&externalRam, 0xFF, 16 * 8192);
     fseek(romPtr, 0, SEEK_END);
     fileSize = ftell(romPtr);
+
+    romSize = romSizeLUT[MMAPARR[0x0148]][1];
     fseek(romPtr, 0, SEEK_SET);
 
     cpu.ime = false;
     initialiseCpuRegs();
     initialiseHardwareRegs();
+    cpu.joypIntrLine = 0;
+    cpu.statIntrLine = 0;
     cpu.ticks = 0;
     cpu.state = fetchOpcode;
     cpu.prefixedInstr = false;
+    cpu.repeatPC = 0;
     cpu.dmaCycle = 0;
     miscOp = doNothing;
 

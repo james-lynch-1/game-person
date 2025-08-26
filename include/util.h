@@ -9,7 +9,7 @@
 #include "math.h"
 #include "type.h"
 
-#define ROMVAL MMAPARR[cpu.regs.file.PC++]
+#define ROMVAL MMAPARR[getPCAndInc()]
 
 void sortScanlineObjs(OamEntry* scanlineObjs, int numScanlineObjs);
 

@@ -1,11 +1,11 @@
 #include "timer.h"
-extern void doNothing();
 
 extern void requestInterrupt(int intr);
 
 void updateTimer() {
-    if (MMAP.ioRegs.timerAndDivider.tima == 0 && timaOverflow) {
-        timaOverflow = false;
+    if (MMAP.ioRegs.timerAndDivider.tima == 0 && timaOverflow && --timaOverflow == 1) {
+        timaOverflow = 0;
+        timaUnsettable = true;
         MMAP.ioRegs.timerAndDivider.tima = MMAP.ioRegs.timerAndDivider.tma;
         requestInterrupt(INTR_TIMER);
     }
@@ -16,8 +16,8 @@ void updateTimer() {
     int newAndResult = (cycles >> bitShiftLut[clockSelect]) & tacEnabled;
     if (newAndResult < andResult)
         MMAP.ioRegs.timerAndDivider.tima++;
-    if (MMAP.ioRegs.timerAndDivider.tima == 0xFF) {
-        timaOverflow = true;
+    if (MMAP.ioRegs.timerAndDivider.tima == 0xFF && !timaOverflow) {
+        timaOverflow = 5;
     }
     andResult = newAndResult;
 }
