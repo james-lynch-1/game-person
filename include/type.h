@@ -30,7 +30,7 @@ enum CpuState {
     fetchOpcode, executeInstruction
 };
 enum PpuState {
-    mode2, mode3, mode0, mode1 // OAM scan, drawing pixels, hBlank, vBlank
+    mode2, mode3, mode0, mode1 // 2: OAM scan, 3: drawing pixels, 0: hBlank, 1: vBlank
 };
 enum FetcherState {
     getTile, getTileDataLow, getTileDataHigh, push
@@ -78,7 +78,6 @@ typedef struct Cpu_ {
     Registers regs;
     u8 joypIntrLine;
     u8 statIntrLine;
-    int ticks;
     enum CpuState state;
     int opcode;
     bool prefixedInstr;
@@ -126,6 +125,8 @@ typedef struct Ppu_ {
     enum PpuState state;
     u32 ticks;
     u8 x;
+    u8 windowY;
+    bool justEnabled;
 } Ppu;
 
 typedef struct Pixel_ {
@@ -146,14 +147,14 @@ typedef struct Fetcher_ {
     PixelFIFO objFIFO;
     int ticks;
     enum FetcherState state;
-    int y;
-    int mapAddr;
+    int x;
+    u16 mapAddr;
     u8 tileID; // addr in MMAPARR
     Pixel tileData[8];
     bool isWindow;
 
     bool fetchingObj;
-    int numObjsFetched;
+    int numFetchedObjs;
     OamEntry* currObj;
 } Fetcher;
 

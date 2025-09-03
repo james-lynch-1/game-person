@@ -34,14 +34,14 @@ extern int romSizeLUT[12][3];
 extern Fetcher fetcher;
 extern OamEntry scanlineObjs[10];
 extern int numScanlineObjs;
+extern int bgPal[4];
+extern int objPalArr[2][4];
 
 // renderer stuff
 extern int* gFrameBuffer;
 extern SDL_Window* gSDLWindow;
 extern SDL_Renderer* gSDLRenderer;
 extern SDL_Texture* gSDLTexture;
-extern int bgPal[4];
-extern int objPalArr[2][4];
 static int gDone;
 
 #endif

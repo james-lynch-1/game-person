@@ -18,8 +18,12 @@ bool update() {
     int pitch;
 
     SDL_LockTexture(gSDLTexture, NULL, (void**)&pix, &pitch);
-    for (int i = 0, sp = 0, dp = 0; i < 144; i++, dp += 160, sp += pitch)
-        memcpy(pix + sp, gFrameBuffer + dp, 160 * 4);
+    if (!(LCDPROPS.LCDC & LCD_PPU_ENABLE_MASK))
+        for (int i = 0, sp = 0, dp = 0; i < 144; i++, dp += 160, sp += pitch)
+            memset(pix + sp, 0xFF, 160 * 4);
+    else
+        for (int i = 0, sp = 0, dp = 0; i < 144; i++, dp += 160, sp += pitch)
+            memcpy(pix + sp, gFrameBuffer + dp, 160 * 4);
 
     SDL_UnlockTexture(gSDLTexture);
     SDL_RenderTexture(gSDLRenderer, gSDLTexture, NULL, NULL);
@@ -147,7 +151,7 @@ void initialiseCpuRegs() {
 
 void initialiseValues() {
     maxFPS = 60;
-    scale = 6;
+    scale = 3;
     WINDOW_WIDTH = 160 * scale;
     WINDOW_HEIGHT = 144 * scale;
 
@@ -164,7 +168,6 @@ void initialiseValues() {
     initialiseHardwareRegs();
     cpu.joypIntrLine = 0;
     cpu.statIntrLine = 0;
-    cpu.ticks = 0;
     cpu.state = fetchOpcode;
     cpu.prefixedInstr = false;
     cpu.repeatPC = 0;
@@ -174,6 +177,8 @@ void initialiseValues() {
     ppu.state = mode2;
     ppu.ticks = 0;
     ppu.x = 0;
+    ppu.windowY = 0;
+    ppu.justEnabled = false;
     numScanlineObjs = 0;
 
     initialiseFIFO(&fetcher.bgFIFO);

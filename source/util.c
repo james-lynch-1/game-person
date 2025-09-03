@@ -25,6 +25,7 @@ void initialiseFIFO(PixelFIFO* FIFO) {
 int getSizeFIFO(PixelFIFO* FIFO) {
     int size = FIFO->rear - FIFO->front;
     if (size < 0) size += 8;
+    if (FIFO->front == FIFO->rear) return size;
     return ++size;
 }
 

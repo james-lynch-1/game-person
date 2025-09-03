@@ -43,13 +43,14 @@ OamEntry scanlineObjs[10] = { {0, 0, 0, 0}, {0, 0, 0, 0}, {0, 0, 0, 0}, {0, 0, 0
     {0, 0, 0, 0}, {0, 0, 0, 0}, {0, 0, 0, 0}, {0, 0, 0, 0},
     {0, 0, 0, 0}, {0, 0, 0, 0} };
 int numScanlineObjs;
-
-int* gFrameBuffer;
-SDL_Window* gSDLWindow;
-SDL_Renderer* gSDLRenderer;
-SDL_Texture* gSDLTexture;
 int bgPal[4] = { 0xffffffff, 0xffaaaaaa, 0xff555555, 0xff000000 };
 int objPalArr[2][4] = {
     {0xffffffff, 0xffaaaaaa, 0xff555555, 0xff000000},
     {0xffffffff, 0xffaaaaaa, 0xff555555, 0xff000000}
 };
+
+int* gFrameBuffer;
+SDL_Window* gSDLWindow = NULL;
+SDL_Renderer* gSDLRenderer = NULL;
+SDL_Texture* gSDLTexture = NULL;
+

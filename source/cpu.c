@@ -7,6 +7,7 @@ extern FILE* logPtr;
 void(*opQ[6])(); int numOpsQueued; // counts down. Always pre-decrement when using.
 int pQ[32]; int pIndex; // these act as parameters for the micro-ops. Counts up. Always post-inc.
 void(*miscOp)(); // miscellaneous operation to be done at the end of the opqueue but doesn't incur cycles
+int toSetIme = 0;
 
 void doNothing() {
     return;
@@ -33,8 +34,8 @@ void switchRamBank(int bankNum) {
 void write(u16 dest, u8 val) {
     int bitShiftLut[4] = { 9, 3, 5, 7 }; // for writes to timer TAC
     pIndex += 2;
-    // if (cpu.dmaCycle && dest < 0xFF80 && dest > 0xFFFE) // during OAM DMA, can only access HRAM
-    //     return;
+    if (cpu.dmaCycle && dest < 0xFF80 && dest > 0xFFFE) // during OAM DMA, can only access HRAM
+        return;
     int oldVal = MMAPARR[dest];
     switch (dest >> 12) {
         case 0: case 1: // enable RAM register
@@ -50,8 +51,8 @@ void write(u16 dest, u8 val) {
             break;
         case 8: case 9: // vram
             // can't write to VRAM when drawing pixels
-            // if ((LCDPROPS.LCDC & LCD_PPU_ENABLE_MASK) && (ppu.state == mode3))
-            //     break;
+            if ((LCDPROPS.LCDC & LCD_PPU_ENABLE_MASK) && (ppu.state == mode3))
+                break;
             MMAPARR[dest] = val;
             break;
         case 0xA: case 0xB: // a,b: external ram, if any
@@ -66,9 +67,9 @@ void write(u16 dest, u8 val) {
         case 0xF: // oam, io regs, high ram, interrupt enable register
             switch (dest >> 8) {
                 case 0xFE: // oam
-                    // if (dest >= 0xFE00 && dest <= 0xFE9F &&
-                    //     (ppu.state > mode3 || !(LCDPROPS.LCDC & LCD_PPU_ENABLE_MASK)))
-                    MMAPARR[dest] = val;
+                    if (dest <= 0xFE9F &&
+                        (ppu.state > mode3 || !(LCDPROPS.LCDC & LCD_PPU_ENABLE_MASK)))
+                        MMAPARR[dest] = val;
                     break;
                 case 0xFF: // io registers
                     MMAPARR[dest] = val;
@@ -98,10 +99,14 @@ void write(u16 dest, u8 val) {
                             break;
                         case 0xFF07:
                             MMAPARR[dest] = (oldVal & 0b11111000) | (val & 0b00000111);
+                            // fix the timing when writing to TIMA as it overflows
                             if (!((cycles >> bitShiftLut[val & 0b11]) & 1) && (andResult & ~1))
                                 updateTimer();
                             if (!(val & 0b100) && (oldVal & 0b100))
                                 updateTimer();
+                            break;
+                        case 0xFF0F: // IF - Interrupt flag
+                            MMAPARR[dest] = (oldVal & 0b11100000) | (val & 0b00011111);
                             break;
                         case 0xFF03: case 0xFF08: case 0xFF09: case 0xFF0A: case 0xFF0B:
                         case 0xFF0C: case 0xFF0D: case 0xFF0E: case 0xFF15: case 0xFF1F:
@@ -130,11 +135,6 @@ void write(u16 dest, u8 val) {
                         case 0xFF1C:
                             MMAPARR[dest] = (oldVal & 0b10011111) | (val & 0b01100000);
                             break;
-                        case 0xFF0F: // IF - Interrupt flag
-                            MMAPARR[dest] = (oldVal & 0b11100000) | (val & 0b00011111);
-                            for (int i = 0; i < 5; i++)
-                                requestInterrupt(val & (1 << i));
-                            break;
                         case 0xFF20:
                             MMAPARR[dest] = (oldVal & 0b11000000) | (val & 0b00111111);
                             break;
@@ -145,19 +145,25 @@ void write(u16 dest, u8 val) {
                             MMAPARR[dest] = (val & 0x80) | (oldVal & 0x7F);
                             break;
                         case 0xFF40: // LCDPROPS.LCDC
-                            if (!(LCDPROPS.LCDC & LCD_PPU_ENABLE_MASK))
-                                LCDPROPS.STAT = 0b11111100;
+                            if (!(val & LCD_PPU_ENABLE_MASK)) {
+                                ppu.state = mode0;
+                                ppu.justEnabled = true;
+                                ppu.ticks = 376; // because we spend 80 ticks in mode 0
+                                LCDPROPS.STAT &= 0b11111100;
+                                LCDPROPS.LY = 0;
+                                ppu.x = 0;
+                            }
                             break;
                         case 0xFF41: // STAT register
                             MMAPARR[dest] = (val & 0b01111000) | (oldVal & 0b10000111);
-                            // if (val && !(MMAPARR[0xFF41] & 0x7F) && (LCDPROPS.LCDC & LCD_PPU_ENABLE_MASK))
-                            //     requestInterrupt(INTR_LCD);
+                            if (!(oldVal & 0x7F) && (LCDPROPS.LCDC & LCD_PPU_ENABLE_MASK))
+                                requestInterrupt(INTR_LCD);
                             break;
                         case 0xFF44: // LY read-only
                             MMAPARR[dest] = oldVal;
                             break;
                         case OAM_DMA_ADDR:
-                            cpu.dmaCycle = 160;
+                            cpu.dmaCycle = 161;
                             break;
                         case 0xFF47: // update bg colour palette
                             for (int i = 0; i < 4; i++)
@@ -196,7 +202,7 @@ void read(int destRegIndex, u16 addr) {
     bool addrInVram = addr >= 0x8000 && addr <= 0x9FFF;
     bool addrInOAM = addr >= 0xFE00 && addr <= 0xFE9F;
     if (
-        (cpu.dmaCycle && (addr < 0xFF80) && (addr > 0xFFFE)) ||
+        ((cpu.dmaCycle && (cpu.dmaCycle <= 160)) && (addr < 0xFF80) && (addr > 0xFFFE)) ||
         (lcdEnabled &&
             ((inM3 && addrInVram) ||
                 ((inM2 || inM3) && addrInOAM)))) {
@@ -429,8 +435,8 @@ void readRegToReg() { // dest REGARR8 index, src REGARR8 index
     pIndex += 2;
 }
 
-void writeByteToHighMem() { // address, value
-    write(pQ[pIndex], (u8)pQ[pIndex + 1]);
+void writeByteToHighMem() { // address, reg holding value
+    write(pQ[pIndex], REGARR8[pQ[pIndex + 1]]);
 }
 
 void writeByteToMem() { // index of 16-bit reg holding address, value
@@ -578,23 +584,30 @@ u16 getPCAndInc() {
 // ---
 
 void cpuTick() {
-    if (++cpu.ticks < 4) return;
-    cpu.ticks = 0;
+    if (cycles & 3) return;
     if (cpu.dmaCycle) {
         cpu.dmaCycle--;
-        dmaRead(0xFE00 | 0x9F - cpu.dmaCycle, (MMAPARR[OAM_DMA_ADDR] << 8) | (0x9F - cpu.dmaCycle));
-        // MMAPARR[0xFE00 | 0x9F - cpu.dmaCycle] = MMAPARR[(MMAPARR[OAM_DMA_ADDR] << 8) | (0x9F - cpu.dmaCycle)];
+        if (cpu.dmaCycle <= 159)
+            dmaRead(0xFE00 | 0x9F - cpu.dmaCycle, (MMAPARR[OAM_DMA_ADDR] << 8) | (0x9F - cpu.dmaCycle));
     }
     switch (cpu.state) {
         case fetchOpcode:
-            if (!numISROpsQueued) checkUnhandledInterrupts();
+            if (!numISROpsQueued)
+                checkUnhandledInterrupts();
             if (numISROpsQueued > 0) {
-                iSROpQ[--numISROpsQueued]();
-                if (numISROpsQueued == 0) {
-                    iSRMiscOp();
+                // check if interrupt was cancelled
+                if (!(MMAP.iEReg & (1 << ((iSRHandlerAddr - 64) / 8)))) {
+                    numISROpsQueued = 0;
                     cpu.halt = false;
                 }
-                return;
+                else {
+                    iSROpQ[--numISROpsQueued]();
+                    if (numISROpsQueued == 0) {
+                        jumpISR();
+                        cpu.halt = false;
+                    }
+                    return;
+                }
             }
             if (cpu.halt && MMAPARR[cpu.regs.file.PC - 2] != 0xCB) {
                 return;
@@ -603,7 +616,6 @@ void cpuTick() {
             pIndex = 0;
             numOpsQueued = 0;
             cpu.opcode = MMAPARR[getPCAndInc()];
-        opcodeSwitch:
             if (!cpu.prefixedInstr)
                 switch (cpu.opcode) {
                     case 0x00: // NOP 1 4 - - - -
@@ -1110,8 +1122,6 @@ void cpuTick() {
                         break;
                     case 0x76: // HALT 1 4 - - - -
                         if (!cpu.ime && ((MMAP.ioRegs.interrupts & MMAP.iEReg & 0x1F) != 0)) {
-                            // cpu.opcode = MMAPARR[cpu.regs.file.PC];
-                            // goto opcodeSwitch;
                             cpu.repeatPC = -1;
                             break;
                         }
@@ -1595,7 +1605,7 @@ void cpuTick() {
                         numOpsQueued = 2;
                         opQ[1] = readByteToReg; pQ[0] = REGZ_IDX; pQ[1] = ROMVAL;
                         opQ[0] = writeByteToHighMem;
-                        pQ[2] = 0xFF00 | pQ[1]; pQ[3] = cpu.regs.file.AF.A;
+                        pQ[2] = 0xFF00 | pQ[1]; pQ[3] = REGA_IDX;
                         break;
                     case 0xE1: // POP HL 1 12 - - - -
                         numOpsQueued = 2;
@@ -1606,7 +1616,7 @@ void cpuTick() {
                     case 0xE2: // LDH [C] A 1 8 - - - -
                         numOpsQueued = 1;
                         opQ[0] = writeByteToHighMem;
-                        pQ[0] = 0xFF00 | cpu.regs.file.BC.C; pQ[1] = cpu.regs.file.AF.A;
+                        pQ[0] = 0xFF00 | cpu.regs.file.BC.C; pQ[1] = REGA_IDX;
                         break;
                     case 0xE3: // ILLEGAL_E3 1 4 - - - -
                         break;
@@ -1719,7 +1729,7 @@ void cpuTick() {
                         miscOp = readRegToReg; pQ[6] = REGA_IDX; pQ[7] = REGZ_IDX;
                         break;
                     case 0xFB: // EI 1 4 - - - -
-                        setIme();
+                        if (!toSetIme) toSetIme = 2;
                         break;
                     case 0xFC: // ILLEGAL_FC 1 4 - - - -
                         break;
@@ -2709,12 +2719,23 @@ void cpuTick() {
                 cpu.prefixedInstr = false;
                 break;
             }
+            // hack to make 0xFB EI work:
+            if (numOpsQueued == 0)
+                goto execInstrJump;
             break;
         case executeInstruction:
             opQ[--numOpsQueued]();
             if (numOpsQueued == 0) {
                 cpu.state = fetchOpcode;
                 miscOp();
+            }
+        execInstrJump:
+            if (toSetIme == 1) {
+                setIme();
+                toSetIme = 0;
+            }
+            if (toSetIme == 2) {
+                toSetIme--;
             }
             break;
     }

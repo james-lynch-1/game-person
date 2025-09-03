@@ -22,11 +22,23 @@ void readByteToReg();
 
 void doNothing();
 
+void write(u16 dest, u8 val);
+
+void dmaRead(int destAddr, int srcAddr);
+
 // interrupts
 
-extern void(*iSROpQ[6])(); extern int numISROpsQueued;
-extern int iSRParamQ[6]; extern int iSRParamIndex;
-extern void(*iSRMiscOp)();
+extern void(*iSROpQ[5])();
+extern int numISROpsQueued;
+extern int iSRHandlerAddr;
+
+void decrementSPISR();
+
+void writeByteToSPAndDecISR();
+
+void writeByteToSPISR();
+
+void jumpISR();
 
 void requestInterrupt(int intr);
 
