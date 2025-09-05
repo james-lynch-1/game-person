@@ -52,14 +52,14 @@ void handleGamepadInput(SDL_GamepadButtonEvent* e) {
 }
 
 void updateInputGB() {
-    int oldSetBits = ~(MMAP.ioRegs.joypadInput & 0xF);
+    // int oldSetBits = ~(MMAP.ioRegs.joypadInput & 0xF);
     MMAP.ioRegs.joypadInput &= 0xF0;
     int setBits = 0;
     if ((~MMAP.ioRegs.joypadInput & 0b00010000) != 0) // dpad
         setBits = keys;
     if ((~MMAP.ioRegs.joypadInput & 0b00100000) != 0) // buttons
         setBits |= keys >> 4;
-    if (setBits & !oldSetBits)
+    if (setBits)
         requestInterrupt(INTR_JOYPAD);
     MMAP.ioRegs.joypadInput = (MMAP.ioRegs.joypadInput & 0xF0) | (~setBits & 0xF);
 }

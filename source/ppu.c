@@ -84,10 +84,11 @@ void fetcherTick() {
             break;
         case getTileDataHigh:
             getTileData();
-            if (!fetcher.fetchingObj && ppu.ticks <= 86) // discard first tile
+            if (!fetcher.fetchingObj && ppu.ticks <= 86) { // discard first tile
                 fetcher.state = getTile;
-            else
-                fetcher.state = push;
+                break;
+            }
+            fetcher.state = push;
             break;
         case push:
             if (fetcher.fetchingObj) { // merge overlaying obj pixels
@@ -127,7 +128,7 @@ void switchPpuState(enum PpuState state) {
         case mode3:
             ppu.state = mode3;
             ppu.justEnabled = false;
-            cpu.statIntrLine &= ~STAT_MODE2;
+            cpu.statIntrLine &= ~(STAT_MODE0 | STAT_MODE1 | STAT_MODE2);
             LCDPROPS.STAT |= 0b11;
             ppu.x = 0;
             startFetcher();
@@ -141,6 +142,7 @@ void switchPpuState(enum PpuState state) {
             break;
         case mode1:
             ppu.state = mode1;
+            cpu.statIntrLine &= ~(STAT_MODE0 | STAT_MODE2);
             cpu.statIntrLine |= LCDPROPS.STAT & STAT_MODE1;
             ppu.windowY = 0;
             LCDPROPS.STAT = (LCDPROPS.STAT & 0b11111100) | 0b01;
@@ -155,8 +157,7 @@ void ppuTick() {
     Pixel bgPixel, objPixel;
     int size, oamEntryNum, offset8x16, adjustedLYObjPos, prevStatIntr = cpu.statIntrLine;
 
-    ppu.ticks++;
-    if ((ppu.ticks % 4) == 1) {
+    if ((ppu.ticks % 4) == 0) {
         if (LCDPROPS.LY == LCDPROPS.LYC) {
             LCDPROPS.STAT |= STAT_LYC_LY;
             cpu.statIntrLine |= LCDPROPS.STAT & STAT_LYC;
@@ -165,9 +166,12 @@ void ppuTick() {
             LCDPROPS.STAT &= ~STAT_LYC_LY;
             cpu.statIntrLine &= ~STAT_LYC;
         }
+        ppu.statTemporaryFF = false;
     }
     switch (ppu.state) {
         case mode2: // OAM scan
+            if (ppu.ticks == 4 && LCDPROPS.LY == 153)
+                    LCDPROPS.LY == 0;
             cpu.statIntrLine &= ~STAT_MODE2;
             cpu.statIntrLine |= LCDPROPS.STAT & STAT_MODE2;
             if ((ppu.ticks % 2 == 1) && (numScanlineObjs < 10)) {
@@ -218,8 +222,11 @@ void ppuTick() {
             if (isEmptyFIFO(&fetcher.bgFIFO) || fetcher.fetchingObj) break;
             bgPixel = dequeue(&fetcher.bgFIFO);
             objPixel = dequeue(&fetcher.objFIFO);
-            if ((ppu.x == 0) && (!fetcher.isWindow) && ((getSizeFIFO(&fetcher.bgFIFO) + 1) > (8 - (LCDPROPS.SCX % 8))))
+            if ((ppu.x == 0) && (!fetcher.isWindow) &&
+                ((getSizeFIFO(&fetcher.bgFIFO) + 1) > (8 - (LCDPROPS.SCX % 8)))) {
+                fetcher.state = getTile;
                 break;
+            }
             gFrameBuffer[LCDPROPS.LY * 160 + ppu.x] =
                 !(LCDPROPS.LCDC & BG_WDW_ENABLE_PRIORITY_MASK) ?
                 objPalArr[objPixel.palette][objPixel.colour] :
@@ -254,6 +261,8 @@ void ppuTick() {
             }
             break;
     }
-    if (cpu.statIntrLine && !prevStatIntr)
+    if ((cpu.statIntrLine || ppu.statTemporaryFF) && !prevStatIntr) {
         requestInterrupt(INTR_LCD);
+    }
+    ppu.ticks++;
 }

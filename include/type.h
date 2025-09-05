@@ -127,6 +127,7 @@ typedef struct Ppu_ {
     u8 x;
     u8 windowY;
     bool justEnabled;
+    bool statTemporaryFF;
 } Ppu;
 
 typedef struct Pixel_ {

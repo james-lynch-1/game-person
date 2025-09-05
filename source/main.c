@@ -179,6 +179,7 @@ void initialiseValues() {
     ppu.x = 0;
     ppu.windowY = 0;
     ppu.justEnabled = false;
+    ppu.statTemporaryFF = false;
     numScanlineObjs = 0;
 
     initialiseFIFO(&fetcher.bgFIFO);
