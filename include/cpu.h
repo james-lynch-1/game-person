@@ -30,7 +30,7 @@ void dmaRead(int destAddr, int srcAddr);
 
 extern void(*iSROpQ[5])();
 extern int numISROpsQueued;
-extern int iSRHandlerAddr;
+extern int interruptBeingHandled;
 
 void decrementSPISR();
 
@@ -40,9 +40,9 @@ void writeByteToSPISR();
 
 void jumpISR();
 
-void requestInterrupt(int intr);
+void requestInterrupt(int requestedInterrupt);
 
-void handleInterrupt(int intr);
+void handleInterrupt(int requestedInterrupt);
 
 void checkUnhandledInterrupts();
 

@@ -8,7 +8,7 @@ void(*iSROpQ[5])() = {
     doNothing
 };
 int numISROpsQueued;
-int iSRHandlerAddr = 0;
+int interruptBeingHandled = 0;
 
 // special versions of cpu functions that use the ISR operation + param queues and indices
 
@@ -19,6 +19,17 @@ void decrementSPISR() {
 void writeByteToSPAndDecISR() {
     MMAPARR[REGARR16[REGSP_IDX]] = cpu.regs.file.PC >> 8;
     REGARR16[REGSP_IDX]--;
+    // check if interrupt was cancelled
+    if (!(interruptBeingHandled & MMAP.iEReg)) {
+        numISROpsQueued = 0;
+        interruptBeingHandled = 0;
+        for (int i = 0; i < 5; i++) {
+            if (MMAP.iEReg & (1 << i) & MMAP.ioRegs.interrupts) {
+                interruptBeingHandled = MMAP.iEReg & (1 << i);
+                break;
+            }
+        }
+    }
 }
 
 void writeByteToSPISR() { // index of 16-bit reg holding address, value
@@ -26,19 +37,8 @@ void writeByteToSPISR() { // index of 16-bit reg holding address, value
 }
 
 void jumpISR() { // jump to value in register at provided 16-bit index
-    cpu.regs.file.PC = iSRHandlerAddr;
-}
-
-void requestInterrupt(int intr) {
-    MMAP.ioRegs.interrupts |= intr;
-}
-
-void handleInterrupt(int intr) {
-    if (!cpu.ime) {
-        cpu.halt = false;
-        return;
-    }
-    switch (intr) {
+    int iSRHandlerAddr = 0;
+    switch (interruptBeingHandled) {
         case INTR_VBLANK:
             iSRHandlerAddr = 0x40;
             break;
@@ -55,10 +55,24 @@ void handleInterrupt(int intr) {
             iSRHandlerAddr = 0x60;
             break;
         default: // 0 was passed aka bit is unset
-            return;
+            break;
     }
-    MMAP.ioRegs.interrupts &= ~intr;
+    MMAP.ioRegs.interrupts &= ~interruptBeingHandled;
     cpu.ime = false;
+    cpu.halt = false;
+    cpu.regs.file.PC = iSRHandlerAddr;
+}
+
+void requestInterrupt(int requestedInterrupt) {
+    MMAP.ioRegs.interrupts |= requestedInterrupt;
+}
+
+void handleInterrupt(int requestedInterrupt) {
+    if (!cpu.ime) {
+        cpu.halt = false;
+        return;
+    }
+    interruptBeingHandled = requestedInterrupt;
     numISROpsQueued = 5;
 }
 

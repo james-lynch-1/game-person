@@ -610,21 +610,10 @@ void cpuTick() {
         checkUnhandledInterrupts();
     switch (cpu.state) {
         case fetchOpcode:
-            if (numISROpsQueued > 0) {
-                // check if interrupt was cancelled
-                if (!(MMAP.iEReg & (1 << ((iSRHandlerAddr - 64) / 8)))) {
-                    numISROpsQueued = 0;
-                    cpu.regs.file.PC = 0x0000;
-                    cpu.halt = false;
-                }
-                else {
-                    iSROpQ[--numISROpsQueued]();
-                    if (numISROpsQueued == 0) {
-                        jumpISR();
-                        cpu.halt = false;
-                        iSRHandlerAddr = 0;
-                    }
-                }
+            if (numISROpsQueued > 0 && cpu.opcode != 0xCB) {
+                iSROpQ[--numISROpsQueued]();
+                if (numISROpsQueued == 0)
+                    jumpISR();
                 break;
             }
             if (cpu.halt && MMAPARR[cpu.regs.file.PC - 2] != 0xCB) {

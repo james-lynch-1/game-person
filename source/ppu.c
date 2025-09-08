@@ -1,6 +1,6 @@
 #include "ppu.h"
 
-extern void requestInterrupt(int intr);
+extern void requestInterrupt(int requestedInterrupt);
 
 void getTileData() {
     int hFlip = fetcher.fetchingObj && (fetcher.currObj->attrs & 0b00100000) >> 5;

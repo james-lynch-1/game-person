@@ -24,6 +24,7 @@ Game Boy Color support
 [Blargg tests](https://gbdev.gg8.se/files/roms/blargg-gb-tests/)  
 [Gameboy Doctor](https://github.com/robert/gameboy-doctor) for testing output of Blargg cpu instruction tests  
 [Mooneye Test Suite](https://github.com/Gekkio/mooneye-test-suite)  
+[dmg-acid2](https://github.com/mattcurrie/dmg-acid2)  
 [Gameboy Emulator Development Guide](https://github.com/Hacktix/GBEDG)  
 gbdev Discord  
 ## Building (on Linux using CMake):

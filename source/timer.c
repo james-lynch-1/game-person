@@ -1,6 +1,6 @@
 #include "timer.h"
 
-extern void requestInterrupt(int intr);
+extern void requestInterrupt(int requestedInterrupt);
 
 void updateTimer() {
     if (MMAP.ioRegs.timerAndDivider.tima == 0 && timaOverflow && --timaOverflow == 1) {

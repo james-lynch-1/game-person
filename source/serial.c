@@ -1,6 +1,6 @@
 #include "serial.h"
 
-extern void requestInterrupt(int intr);
+extern void requestInterrupt(int requestedInterrupt);
 
 void handleSCWrite(int val) {
     switch (val & 0b10000001) {
