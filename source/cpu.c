@@ -51,8 +51,8 @@ void write(u16 dest, u8 val) {
             break;
         case 8: case 9: // vram
             // can't write to VRAM when drawing pixels
-            // if ((LCDPROPS.LCDC & LCD_PPU_ENABLE_MASK) && (ppu.state == mode3))
-            //     break;
+            if ((LCDPROPS.LCDC & LCD_PPU_ENABLE_MASK) && (ppu.state == mode3))
+                break;
             MMAPARR[dest] = val;
             break;
         case 0xA: case 0xB: // a,b: external ram, if any
@@ -158,7 +158,8 @@ void write(u16 dest, u8 val) {
                             break;
                         case 0xFF41: // STAT register
                             MMAPARR[dest] = (val & 0b01111000) | (oldVal & 0b10000111);
-                            ppu.statTemporaryFF = true;
+                            if ((ppu.state > mode3) || (oldVal & 0b100))
+                                ppu.statTemporaryFF = true;
                             break;
                         case 0xFF44: // LY read-only
                             MMAPARR[dest] = oldVal;

@@ -1,6 +1,18 @@
 #include "ppu.h"
 
 extern void requestInterrupt(int requestedInterrupt);
+extern void doNothing();
+
+void lookForObj() {
+    for (int i = fetcher.numFetchedObjs; i < numScanlineObjs; i++) {
+        if ((ppu.x < scanlineObjs[i].xPos) &&
+            (ppu.x >= scanlineObjs[i].xPos - 8)) {
+            fetcher.currObj = &scanlineObjs[i];
+            fetcher.numFetchedObjs++;
+            break;
+        }
+    }
+}
 
 void getTileData() {
     int hFlip = fetcher.fetchingObj && (fetcher.currObj->attrs & 0b00100000) >> 5;
@@ -58,7 +70,8 @@ void fetcherTick() {
     if (++fetcher.ticks < 2) return;
     fetcher.ticks = 0;
     Tile* t;
-    Pixel p = { 0, 0, 0, 0 };
+    Pixel p;
+    Pixel blankPixel = { 0, 0, 0, 0 };
     int bit0, bit1;
     switch (fetcher.state) { // first four cases take two ticks (dots) each, last can vary
         case getTile:
@@ -93,12 +106,17 @@ void fetcherTick() {
         case push:
             if (fetcher.fetchingObj) { // merge overlaying obj pixels
                 while (!isFullFIFO(&fetcher.objFIFO))
-                    enqueue(&fetcher.objFIFO, p);
+                    enqueue(&fetcher.objFIFO, blankPixel);
                 for (int i = 0; i < 8; i++) {
                     p = fetcher.tileData[i];
-                    if (p.priority > fetcher.objFIFO.pixels[i].priority ||
-                        (fetcher.objFIFO.pixels[(fetcher.objFIFO.front + i) % 8].colour == 0))
+                    if (fetcher.objFIFO.pixels[(fetcher.objFIFO.front + i) % 8].colour == 0)
                         fetcher.objFIFO.pixels[(fetcher.objFIFO.front + i) % 8] = p;
+                }
+                if (fetcher.currObj->xPos < 8) {
+                    for (int i = 0; i < 8 - fetcher.currObj->xPos; i++) {
+                        dequeue(&fetcher.objFIFO);
+                        enqueue(&fetcher.objFIFO, blankPixel);
+                    }
                 }
             }
             else {
@@ -158,20 +176,18 @@ void ppuTick() {
     int size, oamEntryNum, offset8x16, adjustedLYObjPos, prevStatIntr = cpu.statIntrLine;
 
     if ((ppu.ticks % 4) == 0) {
+        ppu.statTemporaryFF = false;
+        cpu.statIntrLine &= ~STAT_LYC;
         if (LCDPROPS.LY == LCDPROPS.LYC) {
             LCDPROPS.STAT |= STAT_LYC_LY;
             cpu.statIntrLine |= LCDPROPS.STAT & STAT_LYC;
         }
         else {
             LCDPROPS.STAT &= ~STAT_LYC_LY;
-            cpu.statIntrLine &= ~STAT_LYC;
         }
-        ppu.statTemporaryFF = false;
     }
     switch (ppu.state) {
         case mode2: // OAM scan
-            if (ppu.ticks == 4 && LCDPROPS.LY == 153)
-                    LCDPROPS.LY == 0;
             cpu.statIntrLine &= ~STAT_MODE2;
             cpu.statIntrLine |= LCDPROPS.STAT & STAT_MODE2;
             if ((ppu.ticks % 2 == 1) && (numScanlineObjs < 10)) {
@@ -194,39 +210,28 @@ void ppuTick() {
                 fetcher.bgFIFO.front = fetcher.bgFIFO.rear = -1;
                 fetcher.state = getTile;
             }
-            if ((LCDPROPS.LCDC & OBJ_ENABLE_MASK) && !fetcher.currObj) {
-                for (int i = fetcher.numFetchedObjs; i < numScanlineObjs; i++) {
-                    if ((scanlineObjs[i].xPos > ppu.x) &&
-                        (scanlineObjs[i].xPos - 8 <= ppu.x)) {
-                        fetcher.currObj = &scanlineObjs[i];
-                        fetcher.numFetchedObjs++;
-                        break;
-                    }
-                }
-            }
             if (fetcher.currObj && !fetcher.fetchingObj) {
                 // advance the fetcher till it has 8 pixels of bg tile,
                 // so we can overlay the sprite we're about to fetch
                 if (fetcher.state != push || isEmptyFIFO(&fetcher.bgFIFO)) {
                     fetcherTick();
-                    return;
+                    break;
                 }
                 if (!fetcher.fetchingObj) {
                     fetcher.state = getTile;
                     fetcherTick();
-                    return;
+                    break;
                 }
-                // TODO: do the ppu.x = 0 special case here
             }
             fetcherTick();
-            if (isEmptyFIFO(&fetcher.bgFIFO) || fetcher.fetchingObj) break;
+            if ((LCDPROPS.LCDC & OBJ_ENABLE_MASK) && !fetcher.fetchingObj)
+                lookForObj();
+            if (isEmptyFIFO(&fetcher.bgFIFO) || fetcher.currObj) break;
+            if ((ppu.x == 0) && (!fetcher.isWindow)) // discard SCX % 8 pixels
+                while ((getSizeFIFO(&fetcher.bgFIFO)) > (8 - (LCDPROPS.SCX % 8)))
+                    bgPixel = dequeue(&fetcher.bgFIFO);
             bgPixel = dequeue(&fetcher.bgFIFO);
             objPixel = dequeue(&fetcher.objFIFO);
-            if ((ppu.x == 0) && (!fetcher.isWindow) &&
-                ((getSizeFIFO(&fetcher.bgFIFO) + 1) > (8 - (LCDPROPS.SCX % 8)))) {
-                fetcher.state = getTile;
-                break;
-            }
             gFrameBuffer[LCDPROPS.LY * 160 + ppu.x] =
                 !(LCDPROPS.LCDC & BG_WDW_ENABLE_PRIORITY_MASK) ?
                 objPalArr[objPixel.palette][objPixel.colour] :
@@ -247,22 +252,23 @@ void ppuTick() {
                 if (LCDPROPS.LY == 144)
                     switchPpuState(mode1);
                 else
-                    switchPpuState(mode2 + ppu.justEnabled);
+                    switchPpuState(mode2 + (ppu.justEnabled && (LCDPROPS.LY == 0)));
             }
             break;
         case mode1: // vBlank
             cpu.statIntrLine &= ~STAT_MODE1;
             cpu.statIntrLine |= LCDPROPS.STAT & STAT_MODE1;
+            if (LCDPROPS.LY == 153 && ppu.ticks == 4)
+                LCDPROPS.LY = 0;
             if (ppu.ticks == 456) {
                 ppu.ticks = 0;
-                LCDPROPS.LY = (LCDPROPS.LY + 1) % 154;
+                if (LCDPROPS.LY) LCDPROPS.LY++;
                 if (LCDPROPS.LY == 0)
                     switchPpuState(mode2);
             }
             break;
     }
-    if ((cpu.statIntrLine || ppu.statTemporaryFF) && !prevStatIntr) {
+    if ((cpu.statIntrLine || ppu.statTemporaryFF) && !prevStatIntr)
         requestInterrupt(INTR_LCD);
-    }
     ppu.ticks++;
 }

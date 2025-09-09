@@ -1,5 +1,3 @@
 .vscode/
 build/
 vendored/
-cpu_instrs.gb
-mem_timing.gb
