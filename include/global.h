@@ -27,6 +27,7 @@ extern bool externalRamEnabled;
 extern u8 romFile[32][16384];
 extern u8 externalRam[16][8192];
 extern int currRamBank;
+extern int currRomBank;
 extern int fileSize;
 extern int romSize;
 extern int romSizeLUT[12][3];

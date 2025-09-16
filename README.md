@@ -1,5 +1,5 @@
 # GamePerson - Game Boy emulator written in C
-A Game Boy emulator  
+A Game Boy emulator. Supports Windows and Linux  
 Work in progress. Behold Tetris:  
 ![t](https://github.com/user-attachments/assets/1c979e19-da24-4b79-b3cd-824bd1abce01)
 
@@ -28,7 +28,7 @@ Game Boy Color support
 [Numism by PinoBatch](https://github.com/pinobatch/numism/tree/main)  
 [Gameboy Emulator Development Guide](https://github.com/Hacktix/GBEDG)  
 gbdev Discord  
-## Building (on Linux using CMake):
+## Building:
 1. Clone the repository:  
 ```
 git clone https://github.com/james-lynch-1/game-person.git

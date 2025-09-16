@@ -1,6 +1,7 @@
 #ifndef MAIN
 #define MAIN
 
+#include "SDL3/SDL_main.h"
 #include "util.h"
 #include "type.h"
 #include "cpu.h"

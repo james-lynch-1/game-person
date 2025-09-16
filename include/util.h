@@ -5,11 +5,10 @@
 #include <stdlib.h>
 #include <string.h>
 #include "SDL3/SDL.h"
-#include "SDL3/SDL_main.h"
 #include "math.h"
 #include "type.h"
 
-#define ROMVAL MMAPARR[getPCAndInc()]
+#define ROMVAL getOpcodeAtPC(getPCAndInc());
 
 void sortScanlineObjs(OamEntry* scanlineObjs, int numScanlineObjs);
 

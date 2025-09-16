@@ -43,6 +43,8 @@ int main(int argc, char* argv[]) {
     initialiseValues();
     fread(&romFile, 4, fileSize / 4, romPtr);
     memcpy(MMAP.rom.bank0_1, &romFile, 0x8000);
+
+    romSize = romSizeLUT[MMAPARR[0x0148]][1];
     if (fileSize < 32768)
         memset(MMAP.rom.bank0_1 + fileSize, 0xFF, 32768 - fileSize);
     setTitle();
@@ -73,6 +75,7 @@ void loop() {
         updateTimer();
         cpuTick();
         ppuTick();
+        // apuTick();
         cycles++;
         timaUnsettable = false;
     }
@@ -151,16 +154,15 @@ void initialiseCpuRegs() {
 
 void initialiseValues() {
     maxFPS = 60;
-    scale = 3;
+    scale = 6;
     WINDOW_WIDTH = 160 * scale;
     WINDOW_HEIGHT = 144 * scale;
 
-    memset(&MMAPARR, 0xFF, 32768);
-    memset(&externalRam, 0xFF, 16 * 8192);
+    memset(&MMAPARR, 0xFF, 0x8000);
+    memset(&externalRam, 0xFF, 16 * 0x2000);
+    memset(&romFile, 0xFF, 32 * 0x4000);
     fseek(romPtr, 0, SEEK_END);
     fileSize = ftell(romPtr);
-
-    romSize = romSizeLUT[MMAPARR[0x0148]][1];
     fseek(romPtr, 0, SEEK_SET);
 
     cpu.ime = false;

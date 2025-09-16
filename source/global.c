@@ -19,6 +19,7 @@ bool timaUnsettable = false;
 
 bool externalRamEnabled = false;
 u8 externalRam[16][8192];
+int currRomBank = 1;
 int currRamBank = 0;
 u8 romFile[32][16384];
 int fileSize;

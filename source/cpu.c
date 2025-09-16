@@ -23,7 +23,8 @@ void switchRomBank(int bankNum) {
     }
     if (i == 0) return; // number in $0148 isn't a valid cartridge size, so don't try
     int mask = bankNum & (romSizeLUT[i][2] - 1);
-    memcpy(MMAP.rom.Rom_s.bank1, &romFile[mask == 0 ? 1 : mask], 16384);
+    // memcpy(MMAP.rom.Rom_s.bank1, &romFile[mask == 0 ? 1 : mask], 16384);
+    currRomBank = mask == 0 ? 1 : mask;
 }
 
 void switchRamBank(int bankNum) {
@@ -62,7 +63,7 @@ void write(u16 dest, u8 val) {
         case 0xC: case 0xD: // work ram
             MMAPARR[dest] = val;
             break;
-        case 0xE: // echo ram, ignoring for now
+        case 0xE: // echo ram
             dest -= 0x2000;
             MMAPARR[dest] = val;
             break;
@@ -193,6 +194,10 @@ void dmaRead(int destAddr, int srcAddr) {
         MMAPARR[destAddr] = externalRam[currRamBank][srcAddr - 0xA000];
         return;
     }
+    if (srcAddr >= 0x4000 && srcAddr <= 0x7FFF) {
+        MMAPARR[destAddr] = romFile[currRomBank][srcAddr - 0x4000];
+        return;
+    }
     MMAPARR[destAddr] = MMAPARR[srcAddr];
 }
 
@@ -208,14 +213,18 @@ void read(int destRegIndex, u16 addr) {
         REGARR8[destRegIndex] = MMAPARR[(MMAPARR[OAM_DMA_ADDR] << 8) | (0x9F - cpu.dmaCycle)];
         return;
     }
-    if ((lcdEnabled &&
-        ((inM3 && addrInVram) ||
-            ((inM2 || inM3) && addrInOAM)))) {
-        REGARR8[destRegIndex] = 0xFF;
+    if (addr >= 0x4000 && addr <= 0x7FFF) { // get the correct ROM bank
+        REGARR8[destRegIndex] = romFile[currRomBank][addr - 0x4000];
         return;
     }
     if (addr >= 0xA000 && addr <= 0xBFFF) { // get the correct external RAM bank
         REGARR8[destRegIndex] = externalRam[currRamBank][addr - 0xA000];
+        return;
+    }
+    if ((lcdEnabled &&
+        ((inM3 && addrInVram) ||
+            ((inM2 || inM3) && addrInOAM)))) {
+        REGARR8[destRegIndex] = 0xFF;
         return;
     }
     REGARR8[destRegIndex] = MMAPARR[addr];
@@ -598,6 +607,12 @@ u16 getPCAndInc() {
     return pc;
 }
 
+u16 getOpcodeAtPC(u16 pc) {
+    if (pc >= 0x4000 && pc <= 0x7FFF)
+        return romFile[currRomBank][pc - 0x4000];
+    return MMAPARR[pc];
+}
+
 // ---
 
 void cpuTick() {
@@ -617,13 +632,16 @@ void cpuTick() {
                     jumpISR();
                 break;
             }
-            if (cpu.halt && MMAPARR[cpu.regs.file.PC - 2] != 0xCB) {
+            if (cpu.halt && getOpcodeAtPC(cpu.regs.file.PC - 2) != 0xCB) {
                 return;
             }
             miscOp = doNothing;
             pIndex = 0;
             numOpsQueued = 0;
-            cpu.opcode = MMAPARR[getPCAndInc()];
+            cpu.opcode = getOpcodeAtPC(getPCAndInc());
+            // cpu.opcode = MMAPARR[getPCAndInc()];
+            if (cpu.regs.file.PC >= 0x4000 && cpu.regs.file.PC <= 0x7FFF)
+                doNothing();
             if (!cpu.prefixedInstr)
                 switch (cpu.opcode) {
                     case 0x00: // NOP 1 4 - - - -
